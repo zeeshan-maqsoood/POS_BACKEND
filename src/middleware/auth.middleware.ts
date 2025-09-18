@@ -1,24 +1,14 @@
 import { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { hasPermission } from "../types/auth.types";
-import { UserRole, Permission } from "@prisma/client"; // ✅ unified import
-
-// Define JWT payload type
-export type JwtUserPayload = {
-  userId: string;
-  email: string;
-  role: UserRole;
-  permissions: Permission[]; // ✅ always from @prisma/client
-  iat?: number;
-  exp?: number;
-};
+import { hasPermission, JwtPayload, Permission } from "../types/auth.types";
+import { UserRole } from "@prisma/client";
 
 // Extend Express types
 declare global {
   namespace Express {
     interface Request {
-      user?: JwtUserPayload;
+      user?: JwtPayload;
     }
   }
 }
@@ -46,7 +36,7 @@ export const authenticateJWT: RequestHandler = (req, res, next) => {
 
   try {
     console.log('Verifying token...');
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtUserPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
     console.log('Decoded token:', decoded);
     
     // Ensure required fields are present

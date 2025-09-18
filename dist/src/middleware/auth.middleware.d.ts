@@ -1,17 +1,10 @@
 import { RequestHandler } from "express";
-import { UserRole, Permission } from "@prisma/client";
-export type JwtUserPayload = {
-    userId: string;
-    email: string;
-    role: UserRole;
-    permissions: Permission[];
-    iat?: number;
-    exp?: number;
-};
+import { JwtPayload, Permission } from "../types/auth.types";
+import { UserRole } from "@prisma/client";
 declare global {
     namespace Express {
         interface Request {
-            user?: JwtUserPayload;
+            user?: JwtPayload;
         }
     }
 }

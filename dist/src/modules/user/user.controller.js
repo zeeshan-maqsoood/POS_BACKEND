@@ -134,18 +134,23 @@ const login = async (req, res) => {
         if (!result) {
             throw apiResponse_1.ApiError.unauthorized('Invalid email or password');
         }
-        res.cookie('token', result.token, {
+        const cookieOptions = {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             maxAge: 24 * 60 * 60 * 1000, // 1 day
-            domain: process.env.NODE_ENV === 'production' ? '.yourdomain.com' : 'localhost',
             path: '/',
-        });
+        };
+        // Only set domain in production
+        if (process.env.NODE_ENV === 'production' && process.env.DOMAIN) {
+            cookieOptions.domain = process.env.DOMAIN;
+        }
+        res.cookie('token', result.token, cookieOptions);
         const response = apiResponse_1.ApiResponse.success(result, 'Login successful');
         apiResponse_1.ApiResponse.send(res, response);
     }
     catch (error) {
+        console.log(error, "error");
         const apiError = error instanceof apiResponse_1.ApiError
             ? error
             : apiResponse_1.ApiError.unauthorized('Authentication failed');
@@ -154,7 +159,7 @@ const login = async (req, res) => {
 };
 exports.login = login;
 const getProfile = async (req, res) => {
-    console.log();
+    console.log(req.user, "user");
     try {
         if (!req.user?.userId) {
             throw apiResponse_1.ApiError.unauthorized('User not authenticated');
@@ -176,6 +181,7 @@ const getProfile = async (req, res) => {
         apiResponse_1.ApiResponse.send(res, response);
     }
     catch (error) {
+        console.log(error, "error");
         const apiError = error instanceof apiResponse_1.ApiError
             ? error
             : apiResponse_1.ApiError.internal('Error retrieving profile');

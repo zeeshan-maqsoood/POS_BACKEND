@@ -33,6 +33,12 @@ enum Permission {
   ORDER_READ
   ORDER_UPDATE
   ORDER_DELETE
+
+  //POS permissions
+  POS_CREATE
+  POS_READ
+  POS_UPDATE
+  POS_DELETE
   
   // Product permissions
   PRODUCT_CREATE

@@ -353,6 +353,7 @@ exports.userService = {
             };
         }
         catch (error) {
+            console.log(error, "error");
             if (error instanceof apiResponse_1.ApiError)
                 throw error;
             throw apiResponse_1.ApiError.internal('Login failed');
@@ -379,6 +380,7 @@ exports.userService = {
             return user;
         }
         catch (error) {
+            console.log(error, "error");
             if (error instanceof apiResponse_1.ApiError)
                 throw error;
             throw apiResponse_1.ApiError.internal('Failed to fetch profile');

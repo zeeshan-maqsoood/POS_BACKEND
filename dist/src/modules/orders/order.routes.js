@@ -1,8 +1,4 @@
 "use strict";
-// import { Router } from "express";
-// import * as orderController from "./order.controllers";
-// import { authenticateJWT, checkPermission } from "../../middleware/auth.middleware";
-// import { Permission } from "../../generated/prisma";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -37,10 +33,6 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// const router = Router();
-// router.use(authenticateJWT);
-// router.post("/", checkPermission([Permission.ORDER_CREATE]), orderController.createOrder);
-// router.get("/", checkPermission([Permission.ORDER_READ]), orderController.getOrders);
 const express_1 = require("express");
 const orderController = __importStar(require("./order.controllers"));
 const auth_middleware_1 = require("../../middleware/auth.middleware");

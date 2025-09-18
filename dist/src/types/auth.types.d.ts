@@ -15,6 +15,10 @@ export declare const PERMISSIONS: {
     readonly PRODUCT_READ: "PRODUCT_READ";
     readonly PRODUCT_UPDATE: "PRODUCT_UPDATE";
     readonly PRODUCT_DELETE: "PRODUCT_DELETE";
+    readonly POS_CREATE: "POS_CREATE";
+    readonly POS_READ: "POS_READ";
+    readonly POS_UPDATE: "POS_UPDATE";
+    readonly POS_DELETE: "POS_DELETE";
     readonly MENU_CREATE: "MENU_CREATE";
     readonly MENU_READ: "MENU_READ";
     readonly MENU_UPDATE: "MENU_UPDATE";

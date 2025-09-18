@@ -1,14 +1,4 @@
-// import { Router } from "express";
-// import * as orderController from "./order.controllers";
-// import { authenticateJWT, checkPermission } from "../../middleware/auth.middleware";
-// import { Permission } from "../../generated/prisma";
 
-// const router = Router();
-
-// router.use(authenticateJWT);
-
-// router.post("/", checkPermission([Permission.ORDER_CREATE]), orderController.createOrder);
-// router.get("/", checkPermission([Permission.ORDER_READ]), orderController.getOrders);
 import { Router } from "express";
 import * as orderController from "./order.controllers";
 import { validateRequest } from "../../middleware/auth.middleware";

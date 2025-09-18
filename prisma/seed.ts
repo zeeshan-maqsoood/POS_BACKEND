@@ -12,7 +12,6 @@ const adminPermissions = [
   Permission.USER_READ,
   Permission.USER_UPDATE,
   Permission.USER_DELETE,
-  // Commenting out MANAGER permissions as they seem to be causing issues
   Permission.MANAGER_CREATE,
   Permission.MANAGER_READ,
   Permission.MANAGER_UPDATE,
@@ -20,11 +19,10 @@ const adminPermissions = [
   Permission.ORDER_READ,
   Permission.ORDER_UPDATE,
   Permission.ORDER_DELETE,
-  // Commenting out PRODUCT permissions as they seem to be causing issues
-  // Permission.PRODUCT_CREATE,
-  // Permission.PRODUCT_READ,
-  // Permission.PRODUCT_UPDATE,
-  // Permission.PRODUCT_DELETE,
+  Permission.POS_CREATE,
+  Permission.POS_READ,
+  Permission.POS_UPDATE,
+  Permission.POS_DELETE,
   Permission.MENU_CREATE,
   Permission.MENU_READ,
   Permission.MENU_UPDATE,

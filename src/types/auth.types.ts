@@ -25,6 +25,12 @@ export const PERMISSIONS = {
   PRODUCT_UPDATE: 'PRODUCT_UPDATE' as const,
   PRODUCT_DELETE: 'PRODUCT_DELETE' as const,
   
+  // POS permissions
+  POS_CREATE: 'POS_CREATE' as const,
+  POS_READ: 'POS_READ' as const,
+  POS_UPDATE: 'POS_UPDATE' as const,
+  POS_DELETE: 'POS_DELETE' as const,
+
   // Menu permissions
   MENU_CREATE: 'MENU_CREATE' as const,
   MENU_READ: 'MENU_READ' as const,
@@ -69,6 +75,10 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.USER_CREATE,
       PERMISSIONS.USER_UPDATE,
       PERMISSIONS.USER_DELETE,
+      PERMISSIONS.POS_CREATE,
+      PERMISSIONS.POS_READ,
+      PERMISSIONS.POS_UPDATE,
+      PERMISSIONS.POS_DELETE,
       PERMISSIONS.MANAGER_CREATE,
       PERMISSIONS.MANAGER_READ,
       PERMISSIONS.MANAGER_UPDATE,
@@ -89,6 +99,10 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       ...basePermissions,
       PERMISSIONS.USER_READ,
       PERMISSIONS.USER_UPDATE,
+      PERMISSIONS.POS_CREATE,
+      PERMISSIONS.POS_READ,
+      PERMISSIONS.POS_UPDATE,
+
       PERMISSIONS.MENU_CREATE,
       PERMISSIONS.MENU_READ,
       PERMISSIONS.MENU_UPDATE,

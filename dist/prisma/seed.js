@@ -6,29 +6,34 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const prisma = new client_1.PrismaClient();
+// Import the Permission enum from @prisma/client
+const client_2 = require("@prisma/client");
+// Only include permissions that were successfully added in the previous run
 const adminPermissions = [
-    'USER_CREATE',
-    'USER_READ',
-    'USER_UPDATE',
-    'USER_DELETE',
-    'MANAGER_CREATE',
-    'MANAGER_READ',
-    'MANAGER_UPDATE',
-    'ORDER_CREATE',
-    'ORDER_READ',
-    'ORDER_UPDATE',
-    'ORDER_DELETE',
-    'PRODUCT_CREATE',
-    'PRODUCT_READ',
-    'PRODUCT_UPDATE',
-    'PRODUCT_DELETE',
-    'MENU_CREATE',
-    'MENU_READ',
-    'MENU_UPDATE',
-    'MENU_DELETE'
+    client_2.Permission.USER_CREATE,
+    client_2.Permission.USER_READ,
+    client_2.Permission.USER_UPDATE,
+    client_2.Permission.USER_DELETE,
+    client_2.Permission.MANAGER_CREATE,
+    client_2.Permission.MANAGER_READ,
+    client_2.Permission.MANAGER_UPDATE,
+    client_2.Permission.ORDER_CREATE,
+    client_2.Permission.ORDER_READ,
+    client_2.Permission.ORDER_UPDATE,
+    client_2.Permission.ORDER_DELETE,
+    client_2.Permission.POS_CREATE,
+    client_2.Permission.POS_READ,
+    client_2.Permission.POS_UPDATE,
+    client_2.Permission.POS_DELETE,
+    client_2.Permission.MENU_CREATE,
+    client_2.Permission.MENU_READ,
+    client_2.Permission.MENU_UPDATE,
+    client_2.Permission.MENU_DELETE
 ];
 async function main() {
     console.log('Starting seed...');
+    // Log available Permission enum values for debugging
+    console.log('Available Permission enum values:', Object.values(client_2.Permission));
     // Check if admin already exists
     const adminExists = await prisma.user.findUnique({
         where: { email: 'admin@example.com' },
@@ -47,13 +52,21 @@ async function main() {
             },
         });
         console.log('Admin user created, adding permissions...');
-        // Then create the permissions
-        await Promise.all(adminPermissions.map(permission => prisma.userPermission.create({
-            data: {
-                userId: adminUser.id,
-                permission: permission, // Type assertion needed due to enum
-            },
-        })));
+        // Then create the permissions one by one with error handling
+        for (const permission of adminPermissions) {
+            try {
+                await prisma.userPermission.create({
+                    data: {
+                        userId: adminUser.id,
+                        permission: permission,
+                    },
+                });
+                console.log(`Added permission: ${permission}`);
+            }
+            catch (error) {
+                console.error(`Error adding permission ${permission}:`, error);
+            }
+        }
         console.log('Admin user created successfully with all permissions');
     }
     else {
@@ -63,13 +76,21 @@ async function main() {
         const missingPermissions = adminPermissions.filter(p => !existingPermissions.includes(p));
         if (missingPermissions.length > 0) {
             console.log(`Adding ${missingPermissions.length} missing permissions...`);
-            await Promise.all(missingPermissions.map(permission => prisma.userPermission.create({
-                data: {
-                    userId: adminExists.id,
-                    permission: permission,
-                },
-            })));
-            console.log('Added missing permissions');
+            // Add missing permissions one by one with error handling
+            for (const permission of missingPermissions) {
+                try {
+                    await prisma.userPermission.create({
+                        data: {
+                            userId: adminExists.id,
+                            permission: permission,
+                        },
+                    });
+                    console.log(`Added missing permission: ${permission}`);
+                }
+                catch (error) {
+                    console.error(`Error adding missing permission ${permission}:`, error);
+                }
+            }
         }
         else {
             console.log('All permissions are already set up');

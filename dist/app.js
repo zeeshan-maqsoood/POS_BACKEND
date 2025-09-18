@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const morgan_1 = __importDefault(require("morgan"));
-const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const modules_1 = __importDefault(require("./src/modules"));
 const client_1 = require("@prisma/client");
@@ -14,19 +13,23 @@ const cookieParser = require('cookie-parser');
 const app = (0, express_1.default)();
 // Security middleware
 app.use((0, helmet_1.default)());
-// CORS configuration - allowing all origins
-const corsOptions = {
-    origin: '*',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'X-CSRF-Token'],
-    exposedHeaders: ['set-cookie', 'token'],
-    maxAge: 86400, // 24 hours
-    preflightContinue: false,
-    optionsSuccessStatus: 204
-};
-// Enable CORS for all routes
-app.use((0, cors_1.default)(corsOptions));
+// CORS configuration - Allow all origins
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    // Allow any origin
+    if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Expose-Headers', 'set-cookie, token, Authorization');
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    next();
+});
 app.use(cookieParser());
 // Rate limiting
 // app.use(apiLimiter);
