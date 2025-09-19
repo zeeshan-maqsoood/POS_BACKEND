@@ -3,6 +3,14 @@ import { startOfDay, endOfDay, subDays, subMonths, format } from 'date-fns';
 
 const prisma = new PrismaClient();
 
+export interface CategorySales {
+  categoryId: string;
+  categoryName: string;
+  sales: number;
+  orderCount: number;
+  itemsSold: number;
+}
+
 export interface DashboardStats {
   totalRevenue: number;
   totalOrders: number;
@@ -17,6 +25,7 @@ export interface DashboardStats {
   }>;
   revenueData: Array<{ date: string; revenue: number }>;
   orderTrends: Array<{ date: string; count: number }>;
+  salesByCategory: CategorySales[];
 }
 
 export const DashboardService = {
@@ -103,11 +112,15 @@ export const DashboardService = {
     
     // Get order trends for charts
     const orderTrends = await this.getOrderTrends(startDate, now);
+    const salesByCategory = await this.getSalesByCategory(startDate, now);
+
+    const totalRevenue = Number(revenueResult._sum.total) || 0;
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
     return {
-      totalRevenue: Number(revenueResult._sum.total) || 0,
+      totalRevenue,
       totalOrders,
-      averageOrderValue: totalOrders > 0 ? (Number(revenueResult._sum.total) / totalOrders) : 0,
+      averageOrderValue,
       newCustomers,
       popularItems: (popularItems as Array<{ name: string; count: number }>).map((item) => ({
         name: item.name || 'Unknown',
@@ -121,6 +134,7 @@ export const DashboardService = {
       })),
       revenueData,
       orderTrends,
+      salesByCategory,
     };
   },
 
@@ -183,6 +197,93 @@ export const DashboardService = {
     }
 
     return orderTrends;
+  },
+
+  async getSalesByCategory(startDate: Date, endDate: Date): Promise<CategorySales[]> {
+    // Get all menu categories first
+    const categories = await prisma.menuCategory.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    // Get order items with their menu item and category information
+    const orderItems = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          status: 'COMPLETED',
+          paymentStatus: 'PAID',
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        menuItem: {
+          isNot: null, // Only include items that have a menu item
+        },
+      },
+      include: {
+        menuItem: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    // Group order items by category
+    const categoryMap = new Map<string, {
+      categoryId: string;
+      categoryName: string;
+      sales: number;
+      orderCount: Set<string>;
+      itemsSold: number;
+    }>();
+
+    // Initialize all categories with 0 values
+    categories.forEach((category: { id: string; name: string }) => {
+      categoryMap.set(category.id, {
+        categoryId: category.id,
+        categoryName: category.name,
+        sales: 0,
+        orderCount: new Set<string>(),
+        itemsSold: 0,
+      });
+    });
+
+    // Process each order item
+    orderItems.forEach((item: any) => {
+      if (!item.menuItem) return; // Skip if no menu item
+      
+      const categoryId = item.menuItem.categoryId;
+      const categoryData = categoryMap.get(categoryId);
+      
+      if (categoryData) {
+        // Add to sales (price * quantity)
+        categoryData.sales += Number(item.price) * item.quantity;
+        
+        // Add order ID to count unique orders
+        categoryData.orderCount.add(item.orderId);
+        
+        // Add to items sold
+        categoryData.itemsSold += item.quantity;
+      }
+    });
+
+    // Convert the map to an array of CategorySales
+    const result: CategorySales[] = Array.from(categoryMap.values()).map(category => ({
+      categoryId: category.categoryId,
+      categoryName: category.categoryName,
+      sales: parseFloat(category.sales.toFixed(2)),
+      orderCount: category.orderCount.size,
+      itemsSold: category.itemsSold,
+    }));
+
+    // Sort by sales in descending order and filter out categories with no sales
+    return result
+      .filter(cat => cat.sales > 0)
+      .sort((a, b) => b.sales - a.sales);
   },
 };
 
