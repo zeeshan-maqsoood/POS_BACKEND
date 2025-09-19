@@ -131,16 +131,23 @@ export const login = async (req: Request, res: Response) => {
       throw ApiError.unauthorized('Invalid email or password');
     }
 
+    // Determine if the request is over HTTPS (works behind proxies too)
+    const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+
+    // Single cookie configuration that works for both local (HTTP) and prod (HTTPS)
+    // - httpOnly always true
+    // - secure only when the request is HTTPS (prevents cookie drop on HTTP)
+    // - sameSite defaults to 'lax' (works for same-site across ports); if HTTPS and you need cross-site, adjust to 'none'
     const cookieOptions: any = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: Boolean(isSecure),
+      sameSite: isSecure ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 1 day
       path: '/',
     };
 
-    // Only set domain in production
-    if (process.env.NODE_ENV === 'production' && process.env.DOMAIN) {
+    // Set domain only if explicitly provided; otherwise keep host-only for widest compatibility
+    if (process.env.DOMAIN) {
       cookieOptions.domain = process.env.DOMAIN;
     }
 
