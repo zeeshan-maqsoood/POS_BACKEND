@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const morgan_1 = __importDefault(require("morgan"));
+const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const modules_1 = __importDefault(require("./src/modules"));
 const client_1 = require("@prisma/client");
@@ -13,20 +14,31 @@ const cookieParser = require('cookie-parser');
 const app = (0, express_1.default)();
 // Security middleware
 app.use((0, helmet_1.default)());
-// CORS configuration - Allow all origins
+// CORS configuration - Allow all origins while supporting credentials
+const corsOptions = {
+    origin: true, // Reflects the request origin
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'X-CSRF-Token',
+    ],
+    exposedHeaders: ['set-cookie', 'token', 'Authorization'],
+};
+// Ensure caches and proxies vary by Origin when reflecting origin
 app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    // Allow any origin
-    if (origin) {
-        res.header('Access-Control-Allow-Origin', origin);
-    }
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Expose-Headers', 'set-cookie, token, Authorization');
-    // Handle preflight
+    res.header('Vary', 'Origin');
+    next();
+});
+app.use((0, cors_1.default)(corsOptions));
+// Explicitly handle preflight across all routes (Express 5 safe)
+app.use((req, res, next) => {
     if (req.method === 'OPTIONS') {
-        return res.status(204).end();
+        return res.sendStatus(204);
     }
     next();
 });

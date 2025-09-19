@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import morgan from 'morgan';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { apiLimiter } from './src/middleware/auth.middleware';
@@ -13,32 +13,36 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
+// CORS configuration - Allow all origins while supporting credentials
+const corsOptions: CorsOptions = {
+  origin: true, // Reflects the request origin
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'X-CSRF-Token',
+  ],
+  exposedHeaders: ['set-cookie', 'token', 'Authorization'],
+};
 
-// CORS configuration - Allow all origins
+// Ensure caches and proxies vary by Origin when reflecting origin
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Allow any origin
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token'
-  );
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Expose-Headers', 'set-cookie, token, Authorization');
-  
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-  
+  res.header('Vary', 'Origin');
   next();
 });
 
+app.use(cors(corsOptions));
+// Explicitly handle preflight across all routes (Express 5 safe)
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.use(cookieParser());
 // Rate limiting
