@@ -19,47 +19,48 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
  * 🔑 Authentication Middleware
  */
 export const authenticateJWT: RequestHandler = (req, res, next) => {
-  // Try Authorization header first
+  // Gather potential tokens
   const authHeader = req.headers.authorization;
-  let token: string | undefined;
+  const headerToken = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : undefined;
+  const cookieToken = req.cookies?.token;
 
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    token = authHeader.split(" ")[1];
-  } else if (req.cookies?.token) {
-    // Fallback: check cookies (make sure cookie-parser middleware is used!)
-    token = req.cookies.token;
+  if (!headerToken && !cookieToken) {
+    return res.status(401).json({ message: 'No token provided' });
   }
 
-  if (!token) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
-  try {
-    console.log('Verifying token...');
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-    console.log('Decoded token:', decoded);
-    
-    // Ensure required fields are present
-    if (!decoded.userId || !decoded.role) {
-      console.error('Invalid token payload:', decoded);
-      return res.status(401).json({ message: 'Invalid token payload' });
+  // Helper to verify and attach user
+  const tryVerify = (token?: string) => {
+    if (!token) return null;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+      if (!decoded?.userId || !decoded?.role) return null;
+      return decoded;
+    } catch {
+      return null;
     }
-    
-    // Attach user to request
-    req.user = {
-      userId: decoded.userId,
-      email: decoded.email,
-      role: decoded.role,
-      permissions: decoded.permissions || [],
-      iat: decoded.iat,
-      exp: decoded.exp
-    };
-    
-    console.log('User authenticated:', req.user);
-    next();
-  } catch (err) {
-    return res.status(403).json({ message: "Invalid or expired token" });
+  };
+
+  // Prefer header token, but fall back to cookie token if header invalid
+  let decoded = tryVerify(headerToken);
+  const source = decoded ? 'header' : (decoded = tryVerify(cookieToken)) ? 'cookie' : null;
+
+  if (!decoded || !source) {
+    return res.status(403).json({ message: 'Invalid or expired token' });
   }
+
+  // Attach user to request
+  req.user = {
+    userId: decoded.userId,
+    email: decoded.email,
+    role: decoded.role,
+    permissions: decoded.permissions || [],
+    iat: decoded.iat,
+    exp: decoded.exp,
+  };
+
+  next();
 };
 
 /**
