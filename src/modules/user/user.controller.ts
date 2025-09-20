@@ -95,13 +95,24 @@ export const updateManager = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   try {
+    console.log('Updating user:', {
+      userId: req.params.id,
+      updateData: req.body,
+      currentUser: req.user
+    });
+    
     const user = await userService.updateUser(req.params.id, req.body, req.user as JwtPayload);
+    
+    console.log('User updated successfully:', user);
     const response = ApiResponse.success(user, 'User updated successfully');
     ApiResponse.send(res, response);
   } catch (error: any) {
+    console.error('Error updating user:', error);
     const apiError = error instanceof ApiError 
       ? error 
-      : ApiError.badRequest(error.message);
+      : ApiError.internal(error.message || 'Failed to update user');
+    
+    console.error('Sending error response:', apiError);
     ApiResponse.send(res, new ApiResponse(false, apiError.message, null, apiError.statusCode));
   }
 };

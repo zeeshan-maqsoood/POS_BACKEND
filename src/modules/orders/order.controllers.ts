@@ -82,6 +82,7 @@ import * as orderService from "./order.service";
 import { ApiResponse } from "../../utils/apiResponse";
 import { OrderStatus, PaymentStatus, OrderType } from '@prisma/client';
 import { parseISO, isDate } from 'date-fns';
+import { printReceipt } from '../../services/receipt.service';
 
 interface OrderQueryParams {
   status?: OrderStatus;
@@ -99,9 +100,15 @@ interface OrderQueryParams {
 export const createOrder = async (req: Request, res: Response) => {
   try {
     const order = await orderService.createOrderService(req.body);
+    
+    // Print receipt in the background (don't await to avoid delaying the response)
+    printReceipt(order.id).catch(error => {
+      console.error('Error printing receipt:', error);
+    });
+    
     ApiResponse.send(res, ApiResponse.success(order, "Order created successfully", 201));
   } catch (error: any) {
-    console.log(error)
+    console.log(error);
     ApiResponse.send(res, ApiResponse.error(error.message, 400));
   }
 };
@@ -155,6 +162,13 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
       paymentStatus,
       paymentMethod
     );
+
+    // Print receipt when payment is completed
+    if (paymentStatus === 'PAID') {
+      printReceipt(id).catch(error => {
+        console.error('Error printing receipt:', error);
+      });
+    }
 
     ApiResponse.send(res, ApiResponse.success(order, 'Payment status updated successfully'));
   } catch (error: any) {

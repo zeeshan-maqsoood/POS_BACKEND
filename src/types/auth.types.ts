@@ -114,6 +114,11 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.PRODUCT_READ,
     ],
     [UserRole.USER]: basePermissions,
+    [UserRole.KITCHEN_STAFF]: [
+      ...basePermissions,
+      PERMISSIONS.ORDER_READ,
+      PERMISSIONS.ORDER_UPDATE,
+    ],
   };
 
   return rolePermissions[role] || [];
@@ -123,23 +128,26 @@ export const RolePermissions: RolePermissionsType = {
   [UserRole.ADMIN]: getPermissionsForRole(UserRole.ADMIN),
   [UserRole.MANAGER]: getPermissionsForRole(UserRole.MANAGER),
   [UserRole.USER]: getPermissionsForRole(UserRole.USER),
+  [UserRole.KITCHEN_STAFF]: getPermissionsForRole(UserRole.KITCHEN_STAFF),
 };
 
-// Helper function to check if user has required permissions
+// Helper function to check if user has any of the required permissions
 export const hasPermission = (user: JwtPayload, requiredPermissions: Permission[]): boolean => {
   if (user.role === UserRole.ADMIN) return true;
   
-  if (!user.permissions) return false;
-  console.log(user,"user")
-  return requiredPermissions.every(permission => 
-  {
-    console.log(permission,"permission")
-    console.log(user.permissions,"user.permissions")
-    console.log(user.permissions.includes(permission),"user.permissions.includes(permission)")
-    const isPermissionValid=user.permissions.includes(permission)
-    console.log(isPermissionValid,"isPermissionValid")
-
-    return (user.permissions as string[]).includes(permission)
+  if (!user.permissions || user.permissions.length === 0) {
+    console.log("No permissions found for user");
+    return false;
   }
+  
+  console.log("User permissions:", user.permissions);
+  console.log("Required permissions (any of):", requiredPermissions);
+  
+  // Check if user has ANY of the required permissions
+  const hasPermission = requiredPermissions.some(permission => 
+    user.permissions.includes(permission)
   );
+  
+  console.log("Has permission:", hasPermission);
+  return hasPermission;
 };

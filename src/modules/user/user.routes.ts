@@ -39,8 +39,25 @@ router.get(
 // UPDATE user (needs permission)
 router.put(
   "/:id",
+  (req, res, next) => {
+    console.log('Update user route hit', { 
+      method: req.method, 
+      url: req.url, 
+      params: req.params,
+      body: req.body 
+    });
+    next();
+  },
   checkPermission([Permission.USER_UPDATE]),
   userController.updateUser
+);
+
+// Manager specific update route
+router.put(
+  "/managers/:id",
+  checkRole([UserRole.ADMIN]),
+  checkPermission([Permission.USER_UPDATE]),
+  userController.updateManager
 );
 
 // DELETE user (needs Admin role)

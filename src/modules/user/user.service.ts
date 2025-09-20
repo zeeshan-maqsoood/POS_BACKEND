@@ -208,6 +208,7 @@ export const userService = {
 
   // Update user
   updateUser: async (id: string, data: UpdateUserInput, currentUser: JwtPayload): Promise<SafeUser> => {
+    console.log('Starting updateUser with:', { id, data, currentUserId: currentUser?.userId });
     try {
       // Get the existing user to check their current role
       const existingUser = await prisma.user.findUnique({
@@ -309,17 +310,43 @@ export const userService = {
           updatedAt: userWithPermissions.updatedAt,
         };
       });
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorObj = error as Error & { code?: string; meta?: any; };
+      console.error('Error in updateUser:', {
+        error: errorObj,
+        errorName: errorObj?.name,
+        errorMessage: errorObj?.message,
+        errorCode: errorObj?.code,
+        errorStack: errorObj?.stack,
+        isPrismaError: error instanceof Prisma.PrismaClientKnownRequestError,
+        isApiError: error instanceof ApiError
+      });
+
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        console.error('Prisma error details:', {
+          code: error.code,
+          meta: error.meta,
+          message: error.message
+        });
+        
         if (error.code === 'P2002') {
-          throw ApiError.conflict('A user with this email already exists');
+          const meta = error.meta as { target?: string[] };
+          const field = meta?.target?.[0] || 'unknown field';
+          throw ApiError.conflict(`A user with this ${field} already exists`);
         }
         if (error.code === 'P2025') {
           throw ApiError.notFound('User not found');
         }
       }
-      if (error instanceof ApiError) throw error;
-      throw ApiError.internal('Failed to update user');
+      
+      if (error instanceof ApiError) {
+        console.error('API Error in updateUser:', error);
+        throw error;
+      }
+      
+      console.error('Unexpected error in updateUser:', error);
+      const errorMessage = errorObj?.message || 'Unknown error';
+      throw ApiError.internal(`Failed to update user: ${errorMessage}`);
     }
   },
 

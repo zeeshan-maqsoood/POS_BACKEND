@@ -1,4 +1,5 @@
 import { Order, OrderItem, PrismaClient } from '@prisma/client';
+import { printerService } from './printer.service';
 
 const prisma = new PrismaClient();
 
@@ -106,15 +107,13 @@ export const printReceipt = async (orderId: string): Promise<boolean> => {
       return false;
     }
 
-    const receipt = generateReceipt(order);
+    // Print the receipt using the printer service
+    const printSuccess = await printerService.printReceipt(order);
     
-    // For now, we'll log the receipt to console
-    // In production, this would send to a printer
-    console.log('Printing receipt:');
-    console.log(receipt);
-    
-    // TODO: Implement actual printer integration
-    // await sendToPrinter(receipt);
+    if (!printSuccess) {
+      console.error('Failed to print receipt');
+      return false;
+    }
     
     return true;
   } catch (error) {
