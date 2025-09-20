@@ -86,6 +86,11 @@ const getPermissionsForRole = (role) => {
             exports.PERMISSIONS.PRODUCT_READ,
         ],
         [client_1.UserRole.USER]: basePermissions,
+        [client_1.UserRole.KITCHEN_STAFF]: [
+            ...basePermissions,
+            exports.PERMISSIONS.ORDER_READ,
+            exports.PERMISSIONS.ORDER_UPDATE,
+        ],
     };
     return rolePermissions[role] || [];
 };
@@ -94,22 +99,22 @@ exports.RolePermissions = {
     [client_1.UserRole.ADMIN]: (0, exports.getPermissionsForRole)(client_1.UserRole.ADMIN),
     [client_1.UserRole.MANAGER]: (0, exports.getPermissionsForRole)(client_1.UserRole.MANAGER),
     [client_1.UserRole.USER]: (0, exports.getPermissionsForRole)(client_1.UserRole.USER),
+    [client_1.UserRole.KITCHEN_STAFF]: (0, exports.getPermissionsForRole)(client_1.UserRole.KITCHEN_STAFF),
 };
-// Helper function to check if user has required permissions
+// Helper function to check if user has any of the required permissions
 const hasPermission = (user, requiredPermissions) => {
     if (user.role === client_1.UserRole.ADMIN)
         return true;
-    if (!user.permissions)
+    if (!user.permissions || user.permissions.length === 0) {
+        console.log("No permissions found for user");
         return false;
-    console.log(user, "user");
-    return requiredPermissions.every(permission => {
-        console.log(permission, "permission");
-        console.log(user.permissions, "user.permissions");
-        console.log(user.permissions.includes(permission), "user.permissions.includes(permission)");
-        const isPermissionValid = user.permissions.includes(permission);
-        console.log(isPermissionValid, "isPermissionValid");
-        return user.permissions.includes(permission);
-    });
+    }
+    console.log("User permissions:", user.permissions);
+    console.log("Required permissions (any of):", requiredPermissions);
+    // Check if user has ANY of the required permissions
+    const hasPermission = requiredPermissions.some(permission => user.permissions.includes(permission));
+    console.log("Has permission:", hasPermission);
+    return hasPermission;
 };
 exports.hasPermission = hasPermission;
 //# sourceMappingURL=auth.types.js.map

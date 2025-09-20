@@ -52,7 +52,17 @@ router.post("/", (0, auth_middleware_1.checkPermission)([client_2.Permission.USE
 // GET user by ID (needs permission)
 router.get("/:id", (0, auth_middleware_1.checkPermission)([client_2.Permission.USER_READ]), userController.getUser);
 // UPDATE user (needs permission)
-router.put("/:id", (0, auth_middleware_1.checkPermission)([client_2.Permission.USER_UPDATE]), userController.updateUser);
+router.put("/:id", (req, res, next) => {
+    console.log('Update user route hit', {
+        method: req.method,
+        url: req.url,
+        params: req.params,
+        body: req.body
+    });
+    next();
+}, (0, auth_middleware_1.checkPermission)([client_2.Permission.USER_UPDATE]), userController.updateUser);
+// Manager specific update route
+router.put("/managers/:id", (0, auth_middleware_1.checkRole)([client_1.UserRole.ADMIN]), (0, auth_middleware_1.checkPermission)([client_2.Permission.USER_UPDATE]), userController.updateManager);
 // DELETE user (needs Admin role)
 router.delete("/:id", (0, auth_middleware_1.checkRole)([client_1.UserRole.ADMIN]), userController.deleteUser);
 // GET profile (needs permission)

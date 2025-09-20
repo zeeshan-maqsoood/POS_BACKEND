@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.printReceipt = exports.generateReceipt = void 0;
 const client_1 = require("@prisma/client");
+const printer_service_1 = require("./printer.service");
 const prisma = new client_1.PrismaClient();
 const generateReceipt = (order) => {
     const data = {
@@ -79,13 +80,12 @@ const printReceipt = async (orderId) => {
             console.error('Order not found');
             return false;
         }
-        const receipt = (0, exports.generateReceipt)(order);
-        // For now, we'll log the receipt to console
-        // In production, this would send to a printer
-        console.log('Printing receipt:');
-        console.log(receipt);
-        // TODO: Implement actual printer integration
-        // await sendToPrinter(receipt);
+        // Print the receipt using the printer service
+        const printSuccess = await printer_service_1.printerService.printReceipt(order);
+        if (!printSuccess) {
+            console.error('Failed to print receipt');
+            return false;
+        }
         return true;
     }
     catch (error) {

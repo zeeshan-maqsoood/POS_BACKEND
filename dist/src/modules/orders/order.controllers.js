@@ -41,9 +41,14 @@ exports.deleteOrder = exports.updateOrderStatus = exports.getOrderById = exports
 const orderService = __importStar(require("./order.service"));
 const apiResponse_1 = require("../../utils/apiResponse");
 const date_fns_1 = require("date-fns");
+const receipt_service_1 = require("../../services/receipt.service");
 const createOrder = async (req, res) => {
     try {
         const order = await orderService.createOrderService(req.body);
+        // Print receipt in the background (don't await to avoid delaying the response)
+        (0, receipt_service_1.printReceipt)(order.id).catch(error => {
+            console.error('Error printing receipt:', error);
+        });
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, "Order created successfully", 201));
     }
     catch (error) {
@@ -83,6 +88,12 @@ const updatePaymentStatus = async (req, res) => {
             return apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.badRequest('Payment status and payment method are required'));
         }
         const order = await orderService.updatePaymentStatusService(id, paymentStatus, paymentMethod);
+        // Print receipt when payment is completed
+        if (paymentStatus === 'PAID') {
+            (0, receipt_service_1.printReceipt)(id).catch(error => {
+                console.error('Error printing receipt:', error);
+            });
+        }
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, 'Payment status updated successfully'));
     }
     catch (error) {

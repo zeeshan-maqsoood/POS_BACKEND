@@ -12,6 +12,7 @@ const router = Router();
 
 // Public routes (no authentication required)
 router.post("/login", userController.login);
+router.post("/logout", userController.logout);
 
 // Apply authentication middleware to all routes below this line
 router.use(authenticateJWT);

@@ -130,6 +130,28 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
+export const logout = async (req: Request, res: Response) => {
+  try {
+    // Clear the token cookie
+    res.clearCookie('token', {
+      httpOnly: true,
+      path: '/',
+      // Must match the same options used when setting the cookie
+      secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+      sameSite: 'lax',
+      domain: process.env.DOMAIN || undefined,
+    });
+
+    const response = ApiResponse.success(null, 'Logout successful');
+    ApiResponse.send(res, response);
+  } catch (error: any) {
+    const apiError = error instanceof ApiError 
+      ? error 
+      : ApiError.internal('Error during logout');
+    ApiResponse.send(res, new ApiResponse(false, apiError.message, null, apiError.statusCode));
+  }
+};
+
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -141,7 +163,7 @@ export const login = async (req: Request, res: Response) => {
     if (!result) {
       throw ApiError.unauthorized('Invalid email or password');
     }
-
+     
     // Determine if the request is over HTTPS (works behind proxies too)
     const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
 

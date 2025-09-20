@@ -98,14 +98,22 @@ const updateManager = async (req, res) => {
 exports.updateManager = updateManager;
 const updateUser = async (req, res) => {
     try {
+        console.log('Updating user:', {
+            userId: req.params.id,
+            updateData: req.body,
+            currentUser: req.user
+        });
         const user = await user_service_1.userService.updateUser(req.params.id, req.body, req.user);
+        console.log('User updated successfully:', user);
         const response = apiResponse_1.ApiResponse.success(user, 'User updated successfully');
         apiResponse_1.ApiResponse.send(res, response);
     }
     catch (error) {
+        console.error('Error updating user:', error);
         const apiError = error instanceof apiResponse_1.ApiError
             ? error
-            : apiResponse_1.ApiError.badRequest(error.message);
+            : apiResponse_1.ApiError.internal(error.message || 'Failed to update user');
+        console.error('Sending error response:', apiError);
         apiResponse_1.ApiResponse.send(res, new apiResponse_1.ApiResponse(false, apiError.message, null, apiError.statusCode));
     }
 };
@@ -134,15 +142,21 @@ const login = async (req, res) => {
         if (!result) {
             throw apiResponse_1.ApiError.unauthorized('Invalid email or password');
         }
+        // Determine if the request is over HTTPS (works behind proxies too)
+        const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+        // Single cookie configuration that works for both local (HTTP) and prod (HTTPS)
+        // - httpOnly always true
+        // - secure only when the request is HTTPS (prevents cookie drop on HTTP)
+        // - sameSite defaults to 'lax' (works for same-site across ports); if HTTPS and you need cross-site, adjust to 'none'
         const cookieOptions = {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            secure: Boolean(isSecure),
+            sameSite: isSecure ? 'none' : 'lax',
             maxAge: 24 * 60 * 60 * 1000, // 1 day
             path: '/',
         };
-        // Only set domain in production
-        if (process.env.NODE_ENV === 'production' && process.env.DOMAIN) {
+        // Set domain only if explicitly provided; otherwise keep host-only for widest compatibility
+        if (process.env.DOMAIN) {
             cookieOptions.domain = process.env.DOMAIN;
         }
         res.cookie('token', result.token, cookieOptions);

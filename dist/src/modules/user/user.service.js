@@ -103,7 +103,7 @@ exports.userService = {
         ];
         return exports.userService.createUser({
             ...data,
-            role: client_1.UserRole.MANAGER,
+            role: client_1.UserRole.MANAGER || client_1.UserRole.KITCHEN_STAFF,
             permissions: data.permissions || defaultManagerPermissions,
         }, currentUser);
     },
@@ -126,7 +126,9 @@ exports.userService = {
                 },
                 orderBy: { createdAt: 'desc' },
                 where: {
-                    role: client_1.UserRole.MANAGER
+                    role: {
+                        in: [client_1.UserRole.MANAGER, client_1.UserRole.KITCHEN_STAFF]
+                    }
                 }
             });
             return users;
@@ -185,6 +187,7 @@ exports.userService = {
     },
     // Update user
     updateUser: async (id, data, currentUser) => {
+        console.log('Starting updateUser with:', { id, data, currentUserId: currentUser?.userId });
         try {
             // Get the existing user to check their current role
             const existingUser = await prisma_1.default.user.findUnique({
@@ -275,17 +278,38 @@ exports.userService = {
             });
         }
         catch (error) {
+            const errorObj = error;
+            console.error('Error in updateUser:', {
+                error: errorObj,
+                errorName: errorObj?.name,
+                errorMessage: errorObj?.message,
+                errorCode: errorObj?.code,
+                errorStack: errorObj?.stack,
+                isPrismaError: error instanceof client_1.Prisma.PrismaClientKnownRequestError,
+                isApiError: error instanceof apiResponse_1.ApiError
+            });
             if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                console.error('Prisma error details:', {
+                    code: error.code,
+                    meta: error.meta,
+                    message: error.message
+                });
                 if (error.code === 'P2002') {
-                    throw apiResponse_1.ApiError.conflict('A user with this email already exists');
+                    const meta = error.meta;
+                    const field = meta?.target?.[0] || 'unknown field';
+                    throw apiResponse_1.ApiError.conflict(`A user with this ${field} already exists`);
                 }
                 if (error.code === 'P2025') {
                     throw apiResponse_1.ApiError.notFound('User not found');
                 }
             }
-            if (error instanceof apiResponse_1.ApiError)
+            if (error instanceof apiResponse_1.ApiError) {
+                console.error('API Error in updateUser:', error);
                 throw error;
-            throw apiResponse_1.ApiError.internal('Failed to update user');
+            }
+            console.error('Unexpected error in updateUser:', error);
+            const errorMessage = errorObj?.message || 'Unknown error';
+            throw apiResponse_1.ApiError.internal(`Failed to update user: ${errorMessage}`);
         }
     },
     // Delete user

@@ -1,3 +1,10 @@
+export interface CategorySales {
+    categoryId: string;
+    categoryName: string;
+    sales: number;
+    orderCount: number;
+    itemsSold: number;
+}
 export interface DashboardStats {
     totalRevenue: number;
     totalOrders: number;
@@ -21,6 +28,7 @@ export interface DashboardStats {
         date: string;
         count: number;
     }>;
+    salesByCategory: CategorySales[];
 }
 export declare const DashboardService: {
     getDashboardStats(period?: "day" | "week" | "month"): Promise<DashboardStats>;
@@ -32,5 +40,6 @@ export declare const DashboardService: {
         date: string;
         count: number;
     }[]>;
+    getSalesByCategory(startDate: Date, endDate: Date): Promise<CategorySales[]>;
 };
 export default DashboardService;
