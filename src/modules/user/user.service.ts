@@ -122,8 +122,8 @@ export const userService = {
 
     return userService.createUser({
       ...data,
-      role: UserRole.MANAGER,
-      permissions: data.permissions || defaultManagerPermissions,
+      role: UserRole.MANAGER||UserRole.KITCHEN_STAFF,
+      permissions: data.permissions ||  defaultManagerPermissions,
     }, currentUser);
   },
 
@@ -146,8 +146,10 @@ export const userService = {
           updatedAt: true,
         },
         orderBy: { createdAt: 'desc' },
-        where:{
-          role: UserRole.MANAGER
+        where: {
+          role: {
+            in: [UserRole.MANAGER, UserRole.KITCHEN_STAFF]
+          }
         }
       });
 
