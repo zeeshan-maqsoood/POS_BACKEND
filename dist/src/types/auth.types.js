@@ -85,8 +85,18 @@ const getPermissionsForRole = (role) => {
             exports.PERMISSIONS.ORDER_DELETE,
             exports.PERMISSIONS.PRODUCT_READ,
         ],
-        [client_1.UserRole.USER]: basePermissions,
         [client_1.UserRole.KITCHEN_STAFF]: [
+            ...basePermissions,
+            exports.PERMISSIONS.ORDER_READ,
+            exports.PERMISSIONS.ORDER_UPDATE,
+        ],
+        [client_1.UserRole.CUSTOMER]: basePermissions,
+        [client_1.UserRole.CASHIER]: [
+            ...basePermissions,
+            exports.PERMISSIONS.ORDER_READ,
+            exports.PERMISSIONS.ORDER_UPDATE,
+        ],
+        [client_1.UserRole.WAITER]: [
             ...basePermissions,
             exports.PERMISSIONS.ORDER_READ,
             exports.PERMISSIONS.ORDER_UPDATE,
@@ -98,8 +108,10 @@ exports.getPermissionsForRole = getPermissionsForRole;
 exports.RolePermissions = {
     [client_1.UserRole.ADMIN]: (0, exports.getPermissionsForRole)(client_1.UserRole.ADMIN),
     [client_1.UserRole.MANAGER]: (0, exports.getPermissionsForRole)(client_1.UserRole.MANAGER),
-    [client_1.UserRole.USER]: (0, exports.getPermissionsForRole)(client_1.UserRole.USER),
+    [client_1.UserRole.CASHIER]: (0, exports.getPermissionsForRole)(client_1.UserRole.CASHIER),
+    [client_1.UserRole.WAITER]: (0, exports.getPermissionsForRole)(client_1.UserRole.WAITER),
     [client_1.UserRole.KITCHEN_STAFF]: (0, exports.getPermissionsForRole)(client_1.UserRole.KITCHEN_STAFF),
+    [client_1.UserRole.CUSTOMER]: (0, exports.getPermissionsForRole)(client_1.UserRole.CUSTOMER),
 };
 // Helper function to check if user has any of the required permissions
 const hasPermission = (user, requiredPermissions) => {

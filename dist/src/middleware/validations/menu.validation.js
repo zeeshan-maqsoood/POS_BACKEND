@@ -11,6 +11,7 @@ exports.createCategorySchema = joi_1.default.object({
     description: joi_1.default.string().allow(""),
     imageUrl: joi_1.default.string().uri().optional(),
     isActive: joi_1.default.boolean().default(true),
+    branchName: joi_1.default.string().optional(),
 });
 exports.updateCategorySchema = exports.createCategorySchema.fork(Object.keys(exports.createCategorySchema.describe().keys), (field) => field.optional());
 // --- MenuItem ---
@@ -24,6 +25,7 @@ exports.createMenuItemSchema = joi_1.default.object({
     taxExempt: joi_1.default.boolean().default(false),
     isActive: joi_1.default.boolean().default(true),
     categoryId: joi_1.default.string().required(),
+    branchName: joi_1.default.string().optional(),
     // modifiers: Joi.array().items(Joi.string()).optional(),
     tags: joi_1.default.array().items(joi_1.default.string()).optional(),
 });

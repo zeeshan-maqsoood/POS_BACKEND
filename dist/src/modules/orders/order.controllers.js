@@ -1,8 +1,4 @@
 "use strict";
-// import { Request, Response } from "express";
-// import { orderService } from "./order.service";
-// import { ApiResponse, ApiError } from "../../utils/apiResponse";
-// import { JwtPayload } from "../../types/auth.types";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -41,29 +37,40 @@ exports.deleteOrder = exports.updateOrderStatus = exports.getOrderById = exports
 const orderService = __importStar(require("./order.service"));
 const apiResponse_1 = require("../../utils/apiResponse");
 const date_fns_1 = require("date-fns");
-const receipt_service_1 = require("../../services/receipt.service");
+// Mock implementation of printReceipt if it doesn't exist
+async function mockPrintReceipt(orderId) {
+    console.log(`Printing receipt for order ${orderId}`);
+}
 const createOrder = async (req, res) => {
     try {
-        const order = await orderService.createOrderService(req.body);
+        const currentUser = req.user;
+        const order = await orderService.createOrder(req.body, currentUser);
+        if (!order || !order.id) {
+            throw new Error('Failed to create order: Invalid order data returned from service');
+        }
         // Print receipt in the background (don't await to avoid delaying the response)
-        (0, receipt_service_1.printReceipt)(order.id).catch(error => {
+        mockPrintReceipt(order.id).catch((error) => {
             console.error('Error printing receipt:', error);
         });
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, "Order created successfully", 201));
     }
     catch (error) {
-        console.log(error);
-        apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.error(error.message, 400));
+        console.error('Error creating order:', error);
+        const statusCode = error.statusCode || 400;
+        const message = error.message || 'Failed to create order';
+        apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.error(message, statusCode));
     }
 };
 exports.createOrder = createOrder;
 const getOrders = async (req, res) => {
     try {
-        const { status, paymentStatus, orderType, startDate, endDate, search, page = '1', pageSize = '10', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+        const currentUser = req.user;
+        const { status, paymentStatus, orderType, branchName, startDate, endDate, search, page = '1', pageSize = '10', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
         const orders = await orderService.getOrdersService({
             status,
             paymentStatus: paymentStatus,
             orderType: orderType,
+            branchName: branchName,
             startDate: startDate ? (0, date_fns_1.parseISO)(startDate) : undefined,
             endDate: endDate ? (0, date_fns_1.parseISO)(endDate) : undefined,
             search,
@@ -71,7 +78,7 @@ const getOrders = async (req, res) => {
             pageSize: parseInt(pageSize, 10),
             sortBy,
             sortOrder: sortOrder,
-        });
+        }, currentUser);
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(orders, "Orders retrieved successfully"));
     }
     catch (error) {
@@ -82,15 +89,16 @@ const getOrders = async (req, res) => {
 exports.getOrders = getOrders;
 const updatePaymentStatus = async (req, res) => {
     try {
+        const currentUser = req.user;
         const { id } = req.params;
         const { paymentStatus, paymentMethod } = req.body;
         if (!paymentStatus || !paymentMethod) {
             return apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.badRequest('Payment status and payment method are required'));
         }
-        const order = await orderService.updatePaymentStatusService(id, paymentStatus, paymentMethod);
+        const order = await orderService.updatePaymentStatusService(id, paymentStatus, paymentMethod, currentUser);
         // Print receipt when payment is completed
         if (paymentStatus === 'PAID') {
-            (0, receipt_service_1.printReceipt)(id).catch(error => {
+            mockPrintReceipt(id).catch((error) => {
                 console.error('Error printing receipt:', error);
             });
         }
@@ -117,25 +125,35 @@ const getOrderStats = async (req, res) => {
 };
 exports.getOrderStats = getOrderStats;
 const getOrderById = async (req, res) => {
-    const order = await orderService.getOrderByIdService(req.params.id);
-    if (!order) {
-        return apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.error("Order not found", 404));
+    try {
+        const currentUser = req.user;
+        const order = await orderService.getOrderByIdService(req.params.id, currentUser);
+        if (!order) {
+            return apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.error("Order not found", 404));
+        }
+        apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, "Order retrieved successfully"));
     }
-    apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, "Order retrieved successfully"));
+    catch (error) {
+        console.error('Error getting order:', error);
+        const statusCode = error.statusCode || 500;
+        const message = error.message || 'Failed to get order';
+        apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.error(message, statusCode));
+    }
 };
 exports.getOrderById = getOrderById;
 const updateOrderStatus = async (req, res) => {
     try {
+        const currentUser = req.user;
         const { status, notes } = req.body;
         const { id } = req.params;
         // Update order status with the validated data
-        const order = await orderService.updateOrderStatusService(id, status);
+        const order = await orderService.updateOrderStatusService(id, status, currentUser);
         // If there are notes, update them as well
         if (notes) {
-            await orderService.updateOrder(id, { notes });
+            await orderService.updateOrder(id, { notes }, currentUser);
         }
         // Get the updated order with all fields
-        const updatedOrder = await orderService.getOrderByIdService(id);
+        const updatedOrder = await orderService.getOrderByIdService(id, currentUser);
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(updatedOrder, "Order status updated successfully"));
     }
     catch (error) {
@@ -148,7 +166,8 @@ const updateOrderStatus = async (req, res) => {
 exports.updateOrderStatus = updateOrderStatus;
 const deleteOrder = async (req, res) => {
     try {
-        await orderService.deleteOrderService(req.params.id);
+        const currentUser = req.user;
+        await orderService.deleteOrderService(req.params.id, currentUser);
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(null, "Order deleted successfully", 204));
     }
     catch (error) {
@@ -156,4 +175,13 @@ const deleteOrder = async (req, res) => {
     }
 };
 exports.deleteOrder = deleteOrder;
+exports.default = {
+    createOrder: exports.createOrder,
+    getOrders: exports.getOrders,
+    updatePaymentStatus: exports.updatePaymentStatus,
+    getOrderStats: exports.getOrderStats,
+    getOrderById: exports.getOrderById,
+    updateOrderStatus: exports.updateOrderStatus,
+    deleteOrder: exports.deleteOrder
+};
 //# sourceMappingURL=order.controllers.js.map

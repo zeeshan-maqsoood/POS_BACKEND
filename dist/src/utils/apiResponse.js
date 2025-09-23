@@ -2,6 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.errorHandler = exports.ApiError = exports.ApiResponse = void 0;
 class ApiResponse {
+    static badRequest(arg0) {
+        throw new Error("Method not implemented.");
+    }
     constructor(success, message, data = null, statusCode = 200) {
         this.success = success;
         this.message = message;

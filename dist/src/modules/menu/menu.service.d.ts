@@ -1,14 +1,5 @@
 export declare const categoryService: {
-    create(data: any): Promise<{
-        id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
-        description: string | null;
-        imageUrl: string | null;
-        isActive: boolean;
-    }>;
-    list(): Promise<({
+    create(data: any, user?: any): Promise<{
         menuItems: {
             id: string;
             name: string;
@@ -21,6 +12,7 @@ export declare const categoryService: {
             categoryId: string;
             imageUrl: string | null;
             isActive: boolean;
+            branchName: string | null;
             price: number;
             cost: number | null;
         }[];
@@ -32,8 +24,36 @@ export declare const categoryService: {
         description: string | null;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
+    }>;
+    list(user?: any, queryParams?: any): Promise<({
+        menuItems: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            description: string | null;
+            tags: string[];
+            taxRate: number;
+            taxExempt: boolean;
+            categoryId: string;
+            imageUrl: string | null;
+            isActive: boolean;
+            branchName: string | null;
+            price: number;
+            cost: number | null;
+        }[];
+    } & {
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string | null;
+        imageUrl: string | null;
+        isActive: boolean;
+        branchName: string | null;
     })[]>;
-    get(id: string): Promise<({
+    get(id: string, user?: any): Promise<({
         menuItems: {
             id: string;
             name: string;
@@ -46,6 +66,7 @@ export declare const categoryService: {
             categoryId: string;
             imageUrl: string | null;
             isActive: boolean;
+            branchName: string | null;
             price: number;
             cost: number | null;
         }[];
@@ -57,8 +78,26 @@ export declare const categoryService: {
         description: string | null;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
     }) | null>;
-    update(id: string, data: any): Promise<{
+    update(id: string, data: any, user?: any): Promise<{
+        menuItems: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            description: string | null;
+            tags: string[];
+            taxRate: number;
+            taxExempt: boolean;
+            categoryId: string;
+            imageUrl: string | null;
+            isActive: boolean;
+            branchName: string | null;
+            price: number;
+            cost: number | null;
+        }[];
+    } & {
         id: string;
         name: string;
         createdAt: Date;
@@ -66,8 +105,9 @@ export declare const categoryService: {
         description: string | null;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
     }>;
-    remove(id: string): Promise<{
+    remove(id: string, user?: any): Promise<{
         id: string;
         name: string;
         createdAt: Date;
@@ -75,10 +115,11 @@ export declare const categoryService: {
         description: string | null;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
     }>;
 };
 export declare const menuItemService: {
-    create(data: any): Promise<{
+    create(data: any, user?: any): Promise<{
         category: {
             id: string;
             name: string;
@@ -87,7 +128,13 @@ export declare const menuItemService: {
             description: string | null;
             imageUrl: string | null;
             isActive: boolean;
+            branchName: string | null;
         };
+        modifiers: {
+            id: string;
+            modifierId: string;
+            menuItemId: string;
+        }[];
     } & {
         id: string;
         name: string;
@@ -100,10 +147,11 @@ export declare const menuItemService: {
         categoryId: string;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
         price: number;
         cost: number | null;
     }>;
-    list(): Promise<({
+    list(user?: any, queryParams?: any): Promise<({
         category: {
             id: string;
             name: string;
@@ -112,7 +160,13 @@ export declare const menuItemService: {
             description: string | null;
             imageUrl: string | null;
             isActive: boolean;
+            branchName: string | null;
         };
+        modifiers: {
+            id: string;
+            modifierId: string;
+            menuItemId: string;
+        }[];
     } & {
         id: string;
         name: string;
@@ -125,10 +179,11 @@ export declare const menuItemService: {
         categoryId: string;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
         price: number;
         cost: number | null;
     })[]>;
-    get(id: string): Promise<({
+    get(id: string, user?: any): Promise<({
         category: {
             id: string;
             name: string;
@@ -137,7 +192,13 @@ export declare const menuItemService: {
             description: string | null;
             imageUrl: string | null;
             isActive: boolean;
+            branchName: string | null;
         };
+        modifiers: {
+            id: string;
+            modifierId: string;
+            menuItemId: string;
+        }[];
     } & {
         id: string;
         name: string;
@@ -150,10 +211,11 @@ export declare const menuItemService: {
         categoryId: string;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
         price: number;
         cost: number | null;
     }) | null>;
-    update(id: string, data: any): Promise<{
+    update(id: string, data: any, user?: any): Promise<{
         category: {
             id: string;
             name: string;
@@ -162,7 +224,13 @@ export declare const menuItemService: {
             description: string | null;
             imageUrl: string | null;
             isActive: boolean;
+            branchName: string | null;
         };
+        modifiers: {
+            id: string;
+            modifierId: string;
+            menuItemId: string;
+        }[];
     } & {
         id: string;
         name: string;
@@ -175,10 +243,11 @@ export declare const menuItemService: {
         categoryId: string;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
         price: number;
         cost: number | null;
     }>;
-    remove(id: string): Promise<{
+    remove(id: string, user?: any): Promise<{
         id: string;
         name: string;
         createdAt: Date;
@@ -190,6 +259,7 @@ export declare const menuItemService: {
         categoryId: string;
         imageUrl: string | null;
         isActive: boolean;
+        branchName: string | null;
         price: number;
         cost: number | null;
     }>;

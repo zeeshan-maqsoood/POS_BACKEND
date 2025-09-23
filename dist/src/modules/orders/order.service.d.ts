@@ -1,86 +1,154 @@
-import { OrderStatus, Prisma, PaymentMethod, PaymentStatus, OrderType } from '@prisma/client';
-interface OrderFilterOptions {
+import { OrderStatus, PaymentMethod, PaymentStatus, OrderType, Prisma } from "@prisma/client";
+import { JwtPayload } from "../../types/auth.types";
+import { CreateOrderInput, UpdateOrderInput, GetOrdersQuery, OrderResponse } from "../../types/order.types";
+type OrderWithItems = Prisma.OrderGetPayload<{
+    include: {
+        items: true;
+        createdBy: {
+            select: {
+                id: true;
+                name: true;
+                email: true;
+            };
+        };
+    };
+}>;
+export declare const orderService: {
+    createOrder: (data: CreateOrderInput, currentUser: JwtPayload) => Promise<{
+        items: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            taxRate: number;
+            price: number;
+            modifiers: Prisma.JsonValue | null;
+            menuItemId: string | null;
+            total: number;
+            tax: number;
+            notes: string | null;
+            quantity: number;
+            orderId: string;
+        }[];
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import(".prisma/client").$Enums.OrderStatus;
+        createdById: string | null;
+        branchName: string | null;
+        paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+        paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+        total: number;
+        orderNumber: string;
+        orderType: import(".prisma/client").$Enums.OrderType;
+        subtotal: number;
+        tax: number;
+        discount: number | null;
+        tableNumber: string | null;
+        customerName: string | null;
+        customerEmail: string | null;
+        customerPhone: string | null;
+        notes: string | null;
+    }>;
+    getOrders: (query: GetOrdersQuery, currentUser: JwtPayload) => Promise<OrderResponse>;
+    getOrderById: (id: string, currentUser: JwtPayload) => Promise<{
+        createdBy: {
+            email: string;
+            id: string;
+            name: string | null;
+        } | null;
+        items: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            taxRate: number;
+            price: number;
+            modifiers: Prisma.JsonValue | null;
+            menuItemId: string | null;
+            total: number;
+            tax: number;
+            notes: string | null;
+            quantity: number;
+            orderId: string;
+        }[];
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import(".prisma/client").$Enums.OrderStatus;
+        createdById: string | null;
+        branchName: string | null;
+        paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+        paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+        total: number;
+        orderNumber: string;
+        orderType: import(".prisma/client").$Enums.OrderType;
+        subtotal: number;
+        tax: number;
+        discount: number | null;
+        tableNumber: string | null;
+        customerName: string | null;
+        customerEmail: string | null;
+        customerPhone: string | null;
+        notes: string | null;
+    }>;
+    updateOrder: (id: string, data: UpdateOrderInput, currentUser: JwtPayload) => Promise<{
+        items: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            taxRate: number;
+            price: number;
+            modifiers: Prisma.JsonValue | null;
+            menuItemId: string | null;
+            total: number;
+            tax: number;
+            notes: string | null;
+            quantity: number;
+            orderId: string;
+        }[];
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import(".prisma/client").$Enums.OrderStatus;
+        createdById: string | null;
+        branchName: string | null;
+        paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+        paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+        total: number;
+        orderNumber: string;
+        orderType: import(".prisma/client").$Enums.OrderType;
+        subtotal: number;
+        tax: number;
+        discount: number | null;
+        tableNumber: string | null;
+        customerName: string | null;
+        customerEmail: string | null;
+        customerPhone: string | null;
+        notes: string | null;
+    }>;
+    deleteOrder: (id: string, currentUser: JwtPayload) => Promise<void>;
+};
+export default orderService;
+export declare function createOrder(data: CreateOrderInput, currentUser: JwtPayload): Promise<OrderWithItems>;
+interface GetOrdersServiceParams {
     status?: OrderStatus;
     paymentStatus?: PaymentStatus;
     orderType?: OrderType;
+    branchName?: string;
     startDate?: Date;
     endDate?: Date;
     search?: string;
-    page?: number;
-    pageSize?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
+    page: number;
+    pageSize: number;
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
 }
-interface OrderItemInput {
-    menuItemId: string;
-    name: string;
-    price: number;
-    quantity: number;
-    taxRate: number;
-    total: number;
-    notes?: string;
-}
-interface CreateOrderInput {
-    tableNumber?: string | null;
-    customerName?: string | null;
-    customerEmail?: string | null;
-    customerPhone?: string | null;
-    items: OrderItemInput[];
-    paymentMethod: PaymentMethod;
-    paymentStatus?: PaymentStatus;
-    status?: OrderStatus;
-    orderType?: OrderType;
-    notes?: string | null;
-    total?: number;
-    subtotal?: number;
-    tax?: number;
-    discount?: number;
-    branchName?: string | null;
-    createdById?: string | null;
-}
-export declare const createOrderService: (data: CreateOrderInput) => Promise<{
-    createdBy: {
-        email: string;
-        id: string;
-        name: string | null;
-    } | null;
-    items: {
-        id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
-        taxRate: number;
-        price: number;
-        modifiers: Prisma.JsonValue | null;
-        tax: number;
-        total: number;
-        notes: string | null;
-        orderId: string;
-        menuItemId: string | null;
-        quantity: number;
-    }[];
-} & {
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    createdById: string | null;
-    orderNumber: string;
-    orderType: import(".prisma/client").$Enums.OrderType;
-    status: import(".prisma/client").$Enums.OrderStatus;
-    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
-    subtotal: number;
-    tax: number;
-    discount: number | null;
-    total: number;
-    tableNumber: string | null;
-    customerName: string | null;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    notes: string | null;
-    branchName: string | null;
-}>;
-export declare const getOrdersService: (options?: OrderFilterOptions) => Promise<{
+export declare function getOrdersService(params: GetOrdersServiceParams, currentUser: JwtPayload): Promise<{
     data: ({
         createdBy: {
             email: string;
@@ -95,42 +163,33 @@ export declare const getOrdersService: (options?: OrderFilterOptions) => Promise
             taxRate: number;
             price: number;
             modifiers: Prisma.JsonValue | null;
-            tax: number;
-            total: number;
-            notes: string | null;
-            orderId: string;
             menuItemId: string | null;
+            total: number;
+            tax: number;
+            notes: string | null;
             quantity: number;
-        }[];
-        payments: {
-            id: string;
-            createdAt: Date;
-            status: import(".prisma/client").$Enums.PaymentStatus;
             orderId: string;
-            method: import(".prisma/client").$Enums.PaymentMethod;
-            amount: number;
-            transactionId: string | null;
         }[];
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.OrderStatus;
         createdById: string | null;
+        branchName: string | null;
+        paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+        paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+        total: number;
         orderNumber: string;
         orderType: import(".prisma/client").$Enums.OrderType;
-        status: import(".prisma/client").$Enums.OrderStatus;
-        paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-        paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
         subtotal: number;
         tax: number;
         discount: number | null;
-        total: number;
         tableNumber: string | null;
         customerName: string | null;
         customerEmail: string | null;
         customerPhone: string | null;
         notes: string | null;
-        branchName: string | null;
     })[];
     meta: {
         total: number;
@@ -139,132 +198,7 @@ export declare const getOrdersService: (options?: OrderFilterOptions) => Promise
         totalPages: number;
     };
 }>;
-export declare const getOrderByIdService: (id: string) => Promise<{
-    createdBy: {
-        email: string;
-        id: string;
-        name: string | null;
-    } | null;
-    items: ({
-        menuItem: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            description: string | null;
-            tags: string[];
-            taxRate: number;
-            taxExempt: boolean;
-            categoryId: string;
-            imageUrl: string | null;
-            isActive: boolean;
-            price: number;
-            cost: number | null;
-        } | null;
-    } & {
-        id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
-        taxRate: number;
-        price: number;
-        modifiers: Prisma.JsonValue | null;
-        tax: number;
-        total: number;
-        notes: string | null;
-        orderId: string;
-        menuItemId: string | null;
-        quantity: number;
-    })[];
-    payments: {
-        id: string;
-        createdAt: Date;
-        status: import(".prisma/client").$Enums.PaymentStatus;
-        orderId: string;
-        method: import(".prisma/client").$Enums.PaymentMethod;
-        amount: number;
-        transactionId: string | null;
-    }[];
-} & {
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    createdById: string | null;
-    orderNumber: string;
-    orderType: import(".prisma/client").$Enums.OrderType;
-    status: import(".prisma/client").$Enums.OrderStatus;
-    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
-    subtotal: number;
-    tax: number;
-    discount: number | null;
-    total: number;
-    tableNumber: string | null;
-    customerName: string | null;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    notes: string | null;
-    branchName: string | null;
-}>;
-export declare const updateOrderStatusService: (id: string, status: OrderStatus, notes?: string) => Promise<{
-    createdBy: {
-        email: string;
-        id: string;
-        name: string | null;
-    } | null;
-    items: ({
-        menuItem: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            description: string | null;
-            tags: string[];
-            taxRate: number;
-            taxExempt: boolean;
-            categoryId: string;
-            imageUrl: string | null;
-            isActive: boolean;
-            price: number;
-            cost: number | null;
-        } | null;
-    } & {
-        id: string;
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
-        taxRate: number;
-        price: number;
-        modifiers: Prisma.JsonValue | null;
-        tax: number;
-        total: number;
-        notes: string | null;
-        orderId: string;
-        menuItemId: string | null;
-        quantity: number;
-    })[];
-} & {
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    createdById: string | null;
-    orderNumber: string;
-    orderType: import(".prisma/client").$Enums.OrderType;
-    status: import(".prisma/client").$Enums.OrderStatus;
-    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
-    subtotal: number;
-    tax: number;
-    discount: number | null;
-    total: number;
-    tableNumber: string | null;
-    customerName: string | null;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    notes: string | null;
-    branchName: string | null;
-}>;
-export declare const updateOrder: (id: string, data: Partial<Prisma.OrderUpdateInput>) => Promise<{
+export declare function updatePaymentStatusService(id: string, paymentStatus: PaymentStatus, paymentMethod: PaymentMethod, currentUser?: JwtPayload): Promise<{
     items: {
         id: string;
         name: string;
@@ -273,65 +207,44 @@ export declare const updateOrder: (id: string, data: Partial<Prisma.OrderUpdateI
         taxRate: number;
         price: number;
         modifiers: Prisma.JsonValue | null;
-        tax: number;
-        total: number;
-        notes: string | null;
-        orderId: string;
         menuItemId: string | null;
+        total: number;
+        tax: number;
+        notes: string | null;
         quantity: number;
+        orderId: string;
     }[];
 } & {
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    status: import(".prisma/client").$Enums.OrderStatus;
     createdById: string | null;
+    branchName: string | null;
+    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+    total: number;
     orderNumber: string;
     orderType: import(".prisma/client").$Enums.OrderType;
-    status: import(".prisma/client").$Enums.OrderStatus;
-    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
     subtotal: number;
     tax: number;
     discount: number | null;
-    total: number;
     tableNumber: string | null;
     customerName: string | null;
     customerEmail: string | null;
     customerPhone: string | null;
     notes: string | null;
-    branchName: string | null;
 }>;
-export declare const getOrderStatsService: (options?: OrderFilterOptions) => Promise<{
-    data: {
-        totalOrders: number;
-        totalRevenue: number;
-        ordersByStatus: Record<import(".prisma/client").$Enums.OrderStatus, number>;
-        revenueByStatus: Record<import(".prisma/client").$Enums.OrderStatus, number>;
-        paymentStatus: Record<string, number>;
-        recentOrders: {
-            createdBy: {
-                id: string;
-                name: string;
-                email: string;
-            } | null;
-            items: {
-                id: string;
-                name: string;
-                price: number;
-                quantity: number;
-                total: number;
-            }[];
-            id: string;
-        }[];
-    };
-    meta: {
-        total: number;
-        page: number;
-        pageSize: number;
-        totalPages: number;
-    };
-}>;
-export declare const updatePaymentStatusService: (id: string, paymentStatus: PaymentStatus, paymentMethod: PaymentMethod) => Promise<{
+export declare function getOrderStatsService(arg0: {
+    startDate: Date | undefined;
+    endDate: Date | undefined;
+}): void;
+export declare function getOrderByIdService(id: string, currentUser: JwtPayload): Promise<{
+    createdBy: {
+        email: string;
+        id: string;
+        name: string | null;
+    } | null;
     items: {
         id: string;
         name: string;
@@ -340,53 +253,108 @@ export declare const updatePaymentStatusService: (id: string, paymentStatus: Pay
         taxRate: number;
         price: number;
         modifiers: Prisma.JsonValue | null;
-        tax: number;
-        total: number;
-        notes: string | null;
-        orderId: string;
         menuItemId: string | null;
+        total: number;
+        tax: number;
+        notes: string | null;
         quantity: number;
+        orderId: string;
     }[];
 } & {
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    status: import(".prisma/client").$Enums.OrderStatus;
     createdById: string | null;
+    branchName: string | null;
+    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+    total: number;
     orderNumber: string;
     orderType: import(".prisma/client").$Enums.OrderType;
-    status: import(".prisma/client").$Enums.OrderStatus;
-    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
     subtotal: number;
     tax: number;
     discount: number | null;
-    total: number;
     tableNumber: string | null;
     customerName: string | null;
     customerEmail: string | null;
     customerPhone: string | null;
     notes: string | null;
-    branchName: string | null;
 }>;
-export declare const deleteOrderService: (id: string) => Promise<{
+export declare function updateOrderStatusService(id: string, status: OrderStatus, currentUser: JwtPayload): Promise<{
+    items: {
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        taxRate: number;
+        price: number;
+        modifiers: Prisma.JsonValue | null;
+        menuItemId: string | null;
+        total: number;
+        tax: number;
+        notes: string | null;
+        quantity: number;
+        orderId: string;
+    }[];
+} & {
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    status: import(".prisma/client").$Enums.OrderStatus;
     createdById: string | null;
+    branchName: string | null;
+    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+    total: number;
     orderNumber: string;
     orderType: import(".prisma/client").$Enums.OrderType;
-    status: import(".prisma/client").$Enums.OrderStatus;
-    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
-    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
     subtotal: number;
     tax: number;
     discount: number | null;
-    total: number;
     tableNumber: string | null;
     customerName: string | null;
     customerEmail: string | null;
     customerPhone: string | null;
     notes: string | null;
-    branchName: string | null;
 }>;
-export {};
+export declare function updateOrder(id: string, data: {
+    notes: any;
+}, currentUser?: JwtPayload): Promise<{
+    items: {
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        taxRate: number;
+        price: number;
+        modifiers: Prisma.JsonValue | null;
+        menuItemId: string | null;
+        total: number;
+        tax: number;
+        notes: string | null;
+        quantity: number;
+        orderId: string;
+    }[];
+} & {
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
+    status: import(".prisma/client").$Enums.OrderStatus;
+    createdById: string | null;
+    branchName: string | null;
+    paymentMethod: import(".prisma/client").$Enums.PaymentMethod | null;
+    paymentStatus: import(".prisma/client").$Enums.PaymentStatus;
+    total: number;
+    orderNumber: string;
+    orderType: import(".prisma/client").$Enums.OrderType;
+    subtotal: number;
+    tax: number;
+    discount: number | null;
+    tableNumber: string | null;
+    customerName: string | null;
+    customerEmail: string | null;
+    customerPhone: string | null;
+    notes: string | null;
+}>;
+export declare function deleteOrderService(id: string, currentUser?: JwtPayload): Promise<void>;

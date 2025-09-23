@@ -66,6 +66,7 @@ class AuthService {
             userId: updatedUser.id,
             email: updatedUser.email,
             role: updatedUser.role,
+            branch: updatedUser.branch,
             permissions: updatedUser.permissions.map(up => up.permission),
         }, JWT_SECRET, { expiresIn: '1d' });
         return {

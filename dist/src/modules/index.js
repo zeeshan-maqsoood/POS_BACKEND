@@ -10,6 +10,7 @@ const menu_routes_1 = __importDefault(require("./menu/menu.routes"));
 const order_routes_1 = __importDefault(require("./orders/order.routes"));
 const dashboard_routes_1 = require("./dashboard/dashboard.routes");
 const receipt_routes_1 = __importDefault(require("./receipt/receipt.routes"));
+const branch_routes_1 = __importDefault(require("./branch/branch.routes"));
 // import authRoutes from "./auth/auth.routes";
 const router = (0, express_1.Router)();
 // API routes
@@ -17,6 +18,7 @@ router.use("/auth", user_routes_1.default);
 router.use("/products", product_routes_1.default);
 router.use("/menu", menu_routes_1.default);
 router.use("/orders", order_routes_1.default);
+router.use("/branches", branch_routes_1.default);
 router.use("/dashboard", dashboard_routes_1.dashboardRouter);
 router.use("/receipts", receipt_routes_1.default);
 // router.use("/auth", authRoutes);

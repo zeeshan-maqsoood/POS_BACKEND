@@ -31,6 +31,7 @@ export type JwtPayload = {
     userId: string;
     email: string;
     role: UserRole;
+    branch?: string;
     permissions: Permission[];
     iat?: number;
     exp?: number;

@@ -4,6 +4,7 @@ export declare class ApiResponse<T> {
     message: string;
     data: T | null;
     statusCode: number;
+    static badRequest(arg0: string): ApiResponse<unknown>;
     constructor(success: boolean, message: string, data?: T | null, statusCode?: number);
     static success<T>(data: T, message?: string, statusCode?: number): ApiResponse<T>;
     static error(message?: string, statusCode?: number): ApiResponse<null>;

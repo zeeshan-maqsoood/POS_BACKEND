@@ -41,6 +41,7 @@ const client_2 = require("@prisma/client");
 const router = (0, express_1.Router)();
 // Public routes (no authentication required)
 router.post("/login", userController.login);
+router.post("/logout", userController.logout);
 // Apply authentication middleware to all routes below this line
 router.use(auth_middleware_1.authenticateJWT);
 // Protected routes (require authentication)

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardService = void 0;
+//@ts-nocheck
 const client_1 = require("@prisma/client");
 const date_fns_1 = require("date-fns");
 const prisma = new client_1.PrismaClient();

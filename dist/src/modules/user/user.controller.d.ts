@@ -6,5 +6,6 @@ export declare const createManager: (req: Request, res: Response) => Promise<voi
 export declare const updateManager: (req: Request, res: Response) => Promise<void>;
 export declare const updateUser: (req: Request, res: Response) => Promise<void>;
 export declare const deleteUser: (req: Request, res: Response) => Promise<void>;
+export declare const logout: (req: Request, res: Response) => Promise<void>;
 export declare const login: (req: Request, res: Response) => Promise<void>;
 export declare const getProfile: (req: Request, res: Response) => Promise<void>;

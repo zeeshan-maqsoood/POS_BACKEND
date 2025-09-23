@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getProfile = exports.login = exports.deleteUser = exports.updateUser = exports.updateManager = exports.createManager = exports.createUser = exports.getUser = exports.getUsers = void 0;
+exports.getProfile = exports.login = exports.logout = exports.deleteUser = exports.updateUser = exports.updateManager = exports.createManager = exports.createUser = exports.getUser = exports.getUsers = void 0;
 const user_service_1 = require("./user.service");
 const apiResponse_1 = require("../../utils/apiResponse");
 // Controller methods
@@ -57,6 +57,9 @@ const createManager = async (req, res) => {
             role: 'MANAGER',
             // Default permissions for a new manager
             permissions: req.body.permissions || [
+                'POS_CREATE',
+                'POS_READ',
+                'POS_UPDATE',
                 'MENU_READ',
                 'MENU_UPDATE',
                 'ORDER_READ',
@@ -132,6 +135,28 @@ const deleteUser = async (req, res) => {
     }
 };
 exports.deleteUser = deleteUser;
+const logout = async (req, res) => {
+    try {
+        // Clear the token cookie
+        res.clearCookie('token', {
+            httpOnly: true,
+            path: '/',
+            // Must match the same options used when setting the cookie
+            secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+            sameSite: 'lax',
+            domain: process.env.DOMAIN || undefined,
+        });
+        const response = apiResponse_1.ApiResponse.success(null, 'Logout successful');
+        apiResponse_1.ApiResponse.send(res, response);
+    }
+    catch (error) {
+        const apiError = error instanceof apiResponse_1.ApiError
+            ? error
+            : apiResponse_1.ApiError.internal('Error during logout');
+        apiResponse_1.ApiResponse.send(res, new apiResponse_1.ApiResponse(false, apiError.message, null, apiError.statusCode));
+    }
+};
+exports.logout = logout;
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -182,12 +207,13 @@ const getProfile = async (req, res) => {
         if (!user) {
             throw apiResponse_1.ApiError.notFound('User not found');
         }
-        // Include permissions in response
+        // Include permissions and branch in response
         const response = apiResponse_1.ApiResponse.success({
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
+            branch: user.branch || null,
             permissions: user.permissions.map(p => p.permission),
             createdAt: user.createdAt,
             updatedAt: user.updatedAt

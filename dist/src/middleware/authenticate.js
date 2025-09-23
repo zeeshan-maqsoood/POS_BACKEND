@@ -23,12 +23,13 @@ const authenticate = (req, res, next) => {
         if (typeof decoded !== 'object' || decoded === null) {
             throw new Error('Invalid token payload');
         }
-        const { userId, email, role, permissions } = decoded;
+        const { userId, email, role, branch, permissions } = decoded;
         // Add user to request object with properly typed permissions
         req.user = {
             userId,
             email,
             role,
+            branch,
             permissions: Array.isArray(permissions)
                 ? permissions.filter((p) => typeof p === 'string' && Object.values(auth_types_1.PERMISSIONS).includes(p))
                 : []

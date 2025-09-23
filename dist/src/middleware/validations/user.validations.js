@@ -11,12 +11,14 @@ exports.createUserSchema = joi_1.default.object({
     email: joi_1.default.string().email().required(),
     password: joi_1.default.string().min(8).required(),
     name: joi_1.default.string(),
+    branch: joi_1.default.string().allow('').optional(),
     role: joi_1.default.string().valid(...Object.values(client_1.UserRole)),
     permissions: joi_1.default.array().items(joi_1.default.string())
 });
 exports.updateUserSchema = joi_1.default.object({
     email: joi_1.default.string().email(),
     name: joi_1.default.string(),
+    branch: joi_1.default.string().allow('').optional(),
     role: joi_1.default.string().valid(...Object.values(client_1.UserRole)),
     permissions: joi_1.default.array().items(joi_1.default.string())
 }).min(1);
