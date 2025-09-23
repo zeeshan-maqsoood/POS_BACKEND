@@ -29,6 +29,73 @@ const adminPermissions = [
   Permission.MENU_DELETE
 ];
 
+// Default categories for each branch
+const defaultCategories = [
+  { name: 'Appetizers', description: 'Starters and small plates', branchName: 'Main Branch' },
+  { name: 'Main Courses', description: 'Entrees and main dishes', branchName: 'Main Branch' },
+  { name: 'Desserts', description: 'Sweet treats and desserts', branchName: 'Main Branch' },
+  { name: 'Beverages', description: 'Drinks and beverages', branchName: 'Main Branch' },
+
+  { name: 'Appetizers', description: 'Starters and small plates', branchName: 'Downtown Branch' },
+  { name: 'Main Courses', description: 'Entrees and main dishes', branchName: 'Downtown Branch' },
+  { name: 'Desserts', description: 'Sweet treats and desserts', branchName: 'Downtown Branch' },
+  { name: 'Beverages', description: 'Drinks and beverages', branchName: 'Downtown Branch' },
+
+  { name: 'Appetizers', description: 'Starters and small plates', branchName: 'Uptown Branch' },
+  { name: 'Main Courses', description: 'Entrees and main dishes', branchName: 'Uptown Branch' },
+  { name: 'Desserts', description: 'Sweet treats and desserts', branchName: 'Uptown Branch' },
+  { name: 'Beverages', description: 'Drinks and beverages', branchName: 'Uptown Branch' },
+
+  { name: 'Appetizers', description: 'Starters and small plates', branchName: 'Westside Branch' },
+  { name: 'Main Courses', description: 'Entrees and main dishes', branchName: 'Westside Branch' },
+  { name: 'Desserts', description: 'Sweet treats and desserts', branchName: 'Westside Branch' },
+  { name: 'Beverages', description: 'Drinks and beverages', branchName: 'Westside Branch' },
+
+  { name: 'Appetizers', description: 'Starters and small plates', branchName: 'Eastside Branch' },
+  { name: 'Main Courses', description: 'Entrees and main dishes', branchName: 'Eastside Branch' },
+  { name: 'Desserts', description: 'Sweet treats and desserts', branchName: 'Eastside Branch' },
+  { name: 'Beverages', description: 'Drinks and beverages', branchName: 'Eastside Branch' },
+];
+
+// Create manager users for each branch
+const managerUsers = [
+  {
+    email: 'manager.main@example.com',
+    password: 'manager123',
+    name: 'Main Branch Manager',
+    role: UserRole.MANAGER,
+    branch: 'Main Branch'
+  },
+  {
+    email: 'manager.downtown@example.com',
+    password: 'manager123',
+    name: 'Downtown Branch Manager',
+    role: UserRole.MANAGER,
+    branch: 'Downtown Branch'
+  },
+  {
+    email: 'manager.uptown@example.com',
+    password: 'manager123',
+    name: 'Uptown Branch Manager',
+    role: UserRole.MANAGER,
+    branch: 'Uptown Branch'
+  },
+  {
+    email: 'manager.westside@example.com',
+    password: 'manager123',
+    name: 'Westside Branch Manager',
+    role: UserRole.MANAGER,
+    branch: 'Westside Branch'
+  },
+  {
+    email: 'manager.eastside@example.com',
+    password: 'manager123',
+    name: 'Eastside Branch Manager',
+    role: UserRole.MANAGER,
+    branch: 'Eastside Branch'
+  }
+];
+
 async function main() {
   console.log('Starting seed...');
   

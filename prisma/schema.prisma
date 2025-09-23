@@ -13,8 +13,16 @@ datasource db {
 enum UserRole {
   ADMIN
   MANAGER
-  USER
+  CASHIER
+  WAITER
   KITCHEN_STAFF
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }
 
 enum Permission {
@@ -91,7 +99,9 @@ model User {
   email        String          @unique
   password     String
   name         String?
-  role         UserRole        @default(USER)
+  branch       String?         // Static branch name (e.g., "Downtown", "Uptown", "City Center")
+  role         UserRole        @default(CUSTOMER)
+  status       UserStatus      @default(ACTIVE)
   createdBy    User?           @relation("CreatedUsers", fields: [createdById], references: [id])
   createdById  String?
   createdUsers User[]          @relation("CreatedUsers")
@@ -99,6 +109,7 @@ model User {
   permissions  UserPermission[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+  
 }
 
 model UserPermission {
@@ -161,8 +172,10 @@ model MenuCategory {
   imageUrl    String?
   isActive    Boolean     @default(true)
   menuItems   MenuItem[]
+  branchName  String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  @@index([branchName])
 }
 
 model MenuItem {
@@ -180,8 +193,10 @@ model MenuItem {
   orderItems    OrderItem[]
   tags          String[]
   modifiers     MenuItemModifier[]
+  branchName        String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  @@index([branchName])
 }
 
 model Order {

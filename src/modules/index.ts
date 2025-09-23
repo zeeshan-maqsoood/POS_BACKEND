@@ -5,6 +5,7 @@ import menuRoutes from "./menu/menu.routes";
 import orderRoutes from "./orders/order.routes";
 import { dashboardRouter } from "./dashboard/dashboard.routes";
 import receiptRoutes from "./receipt/receipt.routes";
+import branchRoutes from "./branch/branch.routes";
 // import authRoutes from "./auth/auth.routes";
 
 const router = Router();
@@ -14,6 +15,7 @@ router.use("/auth", userRoutes);
 router.use("/products", productRoutes);
 router.use("/menu", menuRoutes);
 router.use("/orders", orderRoutes);
+router.use("/branches", branchRoutes);
 router.use("/dashboard", dashboardRouter);
 router.use("/receipts", receiptRoutes);
 // router.use("/auth", authRoutes);

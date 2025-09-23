@@ -6,6 +6,7 @@ export const createCategorySchema = Joi.object({
   description: Joi.string().allow(""),
   imageUrl: Joi.string().uri().optional(),
   isActive: Joi.boolean().default(true),
+  branchName: Joi.string().optional(),
 });
 
 export const updateCategorySchema = createCategorySchema.fork(
@@ -24,6 +25,7 @@ export const createMenuItemSchema = Joi.object({
   taxExempt: Joi.boolean().default(false),
   isActive: Joi.boolean().default(true),
   categoryId: Joi.string().required(),
+  branchName: Joi.string().optional(),
   // modifiers: Joi.array().items(Joi.string()).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
 });

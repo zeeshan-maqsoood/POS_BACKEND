@@ -32,15 +32,16 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
       throw new Error('Invalid token payload');
     }
 
-    const { userId, email, role, permissions } = decoded as JwtPayload;
-    
+    const { userId, email, role, branch, permissions } = decoded as JwtPayload;
+
     // Add user to request object with properly typed permissions
     req.user = {
       userId,
       email,
       role,
-      permissions: Array.isArray(permissions) 
-        ? permissions.filter((p): p is Permission => 
+      branch,
+      permissions: Array.isArray(permissions)
+        ? permissions.filter((p): p is Permission =>
             typeof p === 'string' && Object.values(PERMISSIONS).includes(p as any)
           )
         : []

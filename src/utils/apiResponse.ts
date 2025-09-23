@@ -9,6 +9,9 @@ type ResponseType<T> = {
 };
 
 export class ApiResponse<T> {
+  static badRequest(arg0: string): ApiResponse<unknown> {
+    throw new Error("Method not implemented.");
+  }
   constructor(
     public success: boolean,
     public message: string,

@@ -48,6 +48,7 @@ export type JwtPayload = {
   userId: string;
   email: string;
   role: UserRole;
+  branch?: string;
   permissions: Permission[];
   iat?: number;
   exp?: number;
@@ -113,22 +114,33 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.ORDER_DELETE,
       PERMISSIONS.PRODUCT_READ,
     ],
-    [UserRole.USER]: basePermissions,
     [UserRole.KITCHEN_STAFF]: [
       ...basePermissions,
       PERMISSIONS.ORDER_READ,
       PERMISSIONS.ORDER_UPDATE,
     ],
+    [UserRole.CUSTOMER]: basePermissions,
+    [UserRole.CASHIER]: [
+      ...basePermissions,
+      PERMISSIONS.ORDER_READ,
+      PERMISSIONS.ORDER_UPDATE,
+    ],
+    [UserRole.WAITER]: [
+      ...basePermissions,
+      PERMISSIONS.ORDER_READ,
+      PERMISSIONS.ORDER_UPDATE,
+    ],
   };
-
   return rolePermissions[role] || [];
 };
 
 export const RolePermissions: RolePermissionsType = {
   [UserRole.ADMIN]: getPermissionsForRole(UserRole.ADMIN),
   [UserRole.MANAGER]: getPermissionsForRole(UserRole.MANAGER),
-  [UserRole.USER]: getPermissionsForRole(UserRole.USER),
+  [UserRole.CASHIER]: getPermissionsForRole(UserRole.CASHIER),
+  [UserRole.WAITER]: getPermissionsForRole(UserRole.WAITER),
   [UserRole.KITCHEN_STAFF]: getPermissionsForRole(UserRole.KITCHEN_STAFF),
+  [UserRole.CUSTOMER]: getPermissionsForRole(UserRole.CUSTOMER),
 };
 
 // Helper function to check if user has any of the required permissions

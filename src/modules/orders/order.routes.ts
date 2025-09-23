@@ -1,10 +1,12 @@
-
 import { Router } from "express";
-import * as orderController from "./order.controllers";
-import { validateRequest } from "../../middleware/auth.middleware";
+import orderController from "./order.controllers";
+import { authenticateJWT, validateRequest } from "../../middleware/auth.middleware";
 import { createOrderValidator, updateOrderStatusValidator } from "../../middleware/validations/order.validation";
 
 const router = Router();
+
+// Apply authentication to all order routes
+router.use(authenticateJWT);
 
 // Create a new order
 router.post("/", validateRequest(createOrderValidator), orderController.createOrder);

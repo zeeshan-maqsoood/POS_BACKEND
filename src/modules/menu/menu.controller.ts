@@ -6,27 +6,27 @@ import { ApiResponse, ApiError } from "../../utils/apiResponse";
 export const categoryController = {
   create: async (req: Request, res: Response) => {
     try {
-      const category = await categoryService.create(req.body);
+      const category = await categoryService.create(req.body, req.user);
       ApiResponse.send(res, ApiResponse.success(category, "Category created successfully", 201));
     } catch (error: any) {
       ApiResponse.send(res, new ApiResponse(false, error.message, null, 400));
     }
   },
-  list: async (_req: Request, res: Response) => {
-    const categories = await categoryService.list();
+  list: async (req: Request, res: Response) => {
+    const categories = await categoryService.list(req.user, req.query);
     ApiResponse.send(res, ApiResponse.success(categories, "Categories retrieved successfully"));
   },
   get: async (req: Request, res: Response) => {
-    const category = await categoryService.get(req.params.id);
+    const category = await categoryService.get(req.params.id, req.user);
     if (!category) throw ApiError.notFound("Category not found");
     ApiResponse.send(res, ApiResponse.success(category, "Category retrieved successfully"));
   },
   update: async (req: Request, res: Response) => {
-    const category = await categoryService.update(req.params.id, req.body);
+    const category = await categoryService.update(req.params.id, req.body, req.user);
     ApiResponse.send(res, ApiResponse.success(category, "Category updated successfully"));
   },
   remove: async (req: Request, res: Response) => {
-    await categoryService.remove(req.params.id);
+    await categoryService.remove(req.params.id, req.user);
     ApiResponse.send(res, ApiResponse.success(null, "Category deleted successfully"));
   },
 };
@@ -35,24 +35,24 @@ export const categoryController = {
 export const menuItemController = {
   create: async (req: Request, res: Response) => {
     console.log(req.body)
-    const menuItem = await menuItemService.create(req.body);
+    const menuItem = await menuItemService.create(req.body, req.user);
     ApiResponse.send(res, ApiResponse.success(menuItem, "Menu item created successfully", 201));
   },
-  list: async (_req: Request, res: Response) => {
-    const items = await menuItemService.list();
+  list: async (req: Request, res: Response) => {
+    const items = await menuItemService.list(req.user, req.query);
     ApiResponse.send(res, ApiResponse.success(items, "Menu items retrieved successfully"));
   },
   get: async (req: Request, res: Response) => {
-    const item = await menuItemService.get(req.params.id);
+    const item = await menuItemService.get(req.params.id, req.user);
     if (!item) throw ApiError.notFound("Menu item not found");
     ApiResponse.send(res, ApiResponse.success(item, "Menu item retrieved successfully"));
   },
   update: async (req: Request, res: Response) => {
-    const item = await menuItemService.update(req.params.id, req.body);
+    const item = await menuItemService.update(req.params.id, req.body, req.user);
     ApiResponse.send(res, ApiResponse.success(item, "Menu item updated successfully"));
   },
   remove: async (req: Request, res: Response) => {
-    await menuItemService.remove(req.params.id);
+    await menuItemService.remove(req.params.id, req.user);
     ApiResponse.send(res, ApiResponse.success(null, "Menu item deleted successfully"));
   },
 };

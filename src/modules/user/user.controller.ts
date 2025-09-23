@@ -54,6 +54,9 @@ export const createManager = async (req: Request, res: Response) => {
       role: 'MANAGER' as const,
       // Default permissions for a new manager
       permissions: req.body.permissions || [
+        'POS_CREATE',
+        'POS_READ',
+        'POS_UPDATE',
         'MENU_READ',
         'MENU_UPDATE',
         'ORDER_READ',
@@ -210,13 +213,14 @@ export const getProfile = async (req: Request, res: Response) => {
     }
 
 
-    // Include permissions in response
+    // Include permissions and branch in response
     const response = ApiResponse.success(
       {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        branch: user.branch || null,
         permissions: user.permissions.map(p => p.permission),
         createdAt: user.createdAt,
         updatedAt: user.updatedAt

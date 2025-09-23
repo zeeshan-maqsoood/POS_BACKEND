@@ -55,6 +55,7 @@ export const authenticateJWT: RequestHandler = (req, res, next) => {
     userId: decoded.userId,
     email: decoded.email,
     role: decoded.role,
+    branch: decoded.branch,
     permissions: decoded.permissions || [],
     iat: decoded.iat,
     exp: decoded.exp,

@@ -1,7 +1,7 @@
 import { Prisma, User, UserRole, Permission } from '@prisma/client';
 import prisma from '../../loaders/prisma';
 import bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { JwtPayload } from '../../types/auth.types';
 import { CreateUserInput, UpdateUserInput, SafeUser, UserPermission } from '../../types/user.types';
@@ -10,10 +10,11 @@ import { ApiError } from '../../utils/apiResponse';
 // Types
 type UserWithPermissions = User & {
   permissions: Permission[];
+  branch?: string | null;
 };
 
 type LoginResponse = {
-  user: Omit<User, 'password'>;
+  user: Omit<SafeUser, 'permissions'> & { permissions: string[] };
   token: string;
 };
 
@@ -60,21 +61,30 @@ export const userService = {
     }
 
     // Set default role if not provided
-    const role = data.role || UserRole.USER;
-    
+    const role = data.role || UserRole.CUSTOMER;
+
     // Hash password
     const hashedPassword = await hashPassword(data.password);
 
     try {
-      // Create user with role and permissions
+      // Create user with role, branch, and permissions
+      const userData: any = {
+        id: randomUUID(),
+        email: data.email.toLowerCase().trim(),
+        password: hashedPassword,
+        name: data.name?.trim(),
+        role,
+        createdById: currentUser?.userId || null,
+      };
+
+      // Add branch if provided
+      if (data.branch !== undefined) {
+        userData.branch = data.branch;
+      }
+
       const newUser = await prisma.user.create({
         data: {
-          id: uuidv4(),
-          email: data.email.toLowerCase().trim(),
-          password: hashedPassword,
-          name: data.name?.trim(),
-          role,
-          createdById: currentUser?.userId || null,
+          ...userData,
           permissions: {
             create: (data.permissions || []).map((p) => ({
               permission: p,
@@ -85,33 +95,62 @@ export const userService = {
           id: true,
           email: true,
           name: true,
+          branch: true,
           role: true,
-          permissions: true,
+          permissions: {
+            select: {
+              id: true,
+              userId: true,
+              permission: true,
+              createdAt: true,
+            },
+          },
           createdAt: true,
           updatedAt: true,
         },
       });
 
-      return newUser;
+      // Format the response to match SafeUser type
+      return {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        branch: newUser.branch || null,
+        role: newUser.role,
+        permissions: newUser.permissions.map(p => ({
+          id: p.id,
+          userId: p.userId,
+          permission: p.permission as Permission,
+          createdAt: p.createdAt,
+        })),
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt,
+      };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           throw ApiError.conflict('A user with this email already exists');
         }
       }
+      console.error('Error creating user:', error);
       throw ApiError.internal('Failed to create user');
     }
   },
 
   // Create a new manager (admin only)
-  createManager: async (data: Omit<CreateUserInput, 'role' | 'permissions'> & { permissions?: Permission[] }, currentUser: JwtPayload): Promise<SafeUser> => {
+  createManager: async (data: Omit<CreateUserInput, 'role' | 'permissions' | 'branch'> & {
+    permissions?: Permission[];
+    branch?: string | null;
+  }, currentUser: JwtPayload): Promise<SafeUser> => {
     if (currentUser.role !== UserRole.ADMIN) {
       throw ApiError.forbidden('Only admins can create managers');
     }
-    console.log(currentUser,"currentUser")
 
     // Default manager permissions if none provided
     const defaultManagerPermissions: Permission[] = [
+      'POS_CREATE',
+      'POS_READ',
+      'POS_UPDATE',
       'MENU_READ',
       'MENU_UPDATE',
       'ORDER_READ',
@@ -120,11 +159,18 @@ export const userService = {
       'USER_READ',
     ];
 
-    return userService.createUser({
+    const managerData: CreateUserInput = {
       ...data,
-      role: UserRole.MANAGER||UserRole.KITCHEN_STAFF,
-      permissions: data.permissions ||  defaultManagerPermissions,
-    }, currentUser);
+      role: UserRole.MANAGER || UserRole.KITCHEN_STAFF,
+      permissions: data.permissions || defaultManagerPermissions,
+    };
+
+    // Only include branch if it's provided
+    if (data.branch !== undefined) {
+      managerData.branch = data.branch;
+    }
+
+    return userService.createUser(managerData, currentUser);
   },
 
   // Get all users with pagination and filtering
@@ -136,24 +182,39 @@ export const userService = {
       }
 
       const users = await prisma.user.findMany({
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          permissions: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
         where: {
           role: {
-            in: [UserRole.MANAGER, UserRole.KITCHEN_STAFF]
-          }
-        }
+            in: [UserRole.MANAGER, UserRole.KITCHEN_STAFF],
+          },
+        },
+        include: {
+          permissions: {
+            select: {
+              id: true,
+              permission: true,
+              userId: true,
+              createdAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
       });
 
-      return users;
+      return users.map(user => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        branch: user.branch || null,
+        role: user.role,
+        permissions: user.permissions.map(p => ({
+          id: p.id,
+          userId: p.userId,
+          permission: p.permission as Permission,
+          createdAt: p.createdAt,
+        })),
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      }));
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw ApiError.internal('Failed to fetch users');
@@ -176,15 +237,14 @@ export const userService = {
               id: true,
               userId: true,
               permission: true,
-              createdAt: true
-            }
-          }
+              createdAt: true,
+            },
+          },
         },
       });
-      console.log(user,"user")
 
       if (!user) {
-        throw ApiError.notFound('User not found');
+        return null;
       }
 
       // Return the user with permissions in the expected format
@@ -192,67 +252,92 @@ export const userService = {
         id: user.id,
         email: user.email,
         name: user.name,
+        branch: user.branch || null,
         role: user.role,
         permissions: user.permissions.map(p => ({
           id: p.id,
           userId: p.userId,
           permission: p.permission as Permission,
-          createdAt: p.createdAt
+          createdAt: p.createdAt,
         })),
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       };
     } catch (error) {
+      console.error('Error fetching user by ID:', error);
       if (error instanceof ApiError) throw error;
       throw ApiError.internal('Failed to fetch user');
     }
   },
 
+  // Get user profile (current user)
+  getProfile: async (userId: string): Promise<SafeUser> => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          permissions: {
+            select: {
+              id: true,
+              userId: true,
+              permission: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        throw ApiError.notFound('User not found');
+      }
+
+      // Format the response to match SafeUser type
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        branch: user.branch || null,
+        role: user.role,
+        permissions: user.permissions.map(p => ({
+          id: p.id,
+          userId: p.userId,
+          permission: p.permission as Permission,
+          createdAt: p.createdAt,
+        })),
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      if (error instanceof ApiError) throw error;
+      throw ApiError.internal('Failed to fetch profile');
+    }
+  },
+
   // Update user
   updateUser: async (id: string, data: UpdateUserInput, currentUser: JwtPayload): Promise<SafeUser> => {
-    console.log('Starting updateUser with:', { id, data, currentUserId: currentUser?.userId });
     try {
-      // Get the existing user to check their current role
+      // Check if user exists
       const existingUser = await prisma.user.findUnique({
         where: { id },
-        include: { permissions: true },
+        include: { permissions: true }
       });
 
       if (!existingUser) {
         throw ApiError.notFound('User not found');
       }
 
-      // Only allow users to update their own profile or admins to update any profile
+      // Only allow admins to update users
       if (currentUser.role !== UserRole.ADMIN && currentUser.userId !== id) {
-        throw ApiError.forbidden('You can only update your own profile');
+        throw ApiError.forbidden('You do not have permission to update this user');
       }
 
-      // Prevent role escalation and ensure managers can't be converted to other roles
-      if (data.role) {
-        if (currentUser.role !== UserRole.ADMIN) {
-          throw ApiError.forbidden('Only admins can change user roles');
-        }
-        // Prevent changing role of other admins
-        if (existingUser.role === UserRole.ADMIN && id !== currentUser.userId) {
-          throw ApiError.forbidden('Cannot modify another admin\'s role');
-        }
-      }
+      // Prepare update data - exclude status as it's not a valid field
+      const { permissions, status, ...updateData } = data;
 
-      // If updating password, hash the new one
-      if (data.password) {
-        data.password = await hashPassword(data.password);
-      }
-
-      // Prepare the update data
-      const updateData: any = {
-        email: data.email?.toLowerCase()?.trim(),
-        name: data.name?.trim(),
-        role: data.role,
-      };
-
-      // Only include password if it's being updated
-      if (data.password) {
-        updateData.password = data.password;
+      // Hash password if it's being updated
+      if (updateData.password) {
+        updateData.password = await hashPassword(updateData.password);
       }
 
       // Start a transaction to ensure data consistency
@@ -260,56 +345,35 @@ export const userService = {
         // Update the user
         const updatedUser = await tx.user.update({
           where: { id },
-          data: updateData,
-        });
-
-        // Update permissions if provided
-        if (data.permissions) {
-          // Only admins can modify permissions
-          if (currentUser.role !== UserRole.ADMIN) {
-            throw ApiError.forbidden('Only admins can modify permissions');
+          data: {
+            ...updateData,
+            ...(permissions && {
+              permissions: {
+                deleteMany: {},
+                create: permissions.map(permission => ({ permission }))
+              }
+            })
+          },
+          include: {
+            permissions: true
           }
-
-          // Delete existing permissions
-          await tx.userPermission.deleteMany({
-            where: { userId: id },
-          });
-
-          // Create new permissions
-          if (data.permissions.length > 0) {
-            await tx.userPermission.createMany({
-              data: data.permissions.map(permission => ({
-                userId: id,
-                permission,
-              })),
-            });
-          }
-        }
-
-        // Fetch the updated user with permissions
-        const userWithPermissions = await tx.user.findUnique({
-          where: { id },
-          include: { permissions: true },
         });
-
-        if (!userWithPermissions) {
-          throw ApiError.notFound('User not found after update');
-        }
 
         // Return the user with permissions in the correct format
         return {
-          id: userWithPermissions.id,
-          email: userWithPermissions.email,
-          name: userWithPermissions.name,
-          role: userWithPermissions.role,
-          permissions: userWithPermissions.permissions.map(p => ({
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          branch: updatedUser.branch || null,
+          role: updatedUser.role,
+          permissions: updatedUser.permissions.map(p => ({
             id: p.id,
             userId: p.userId,
             permission: p.permission as Permission,
             createdAt: p.createdAt,
-          })) as unknown as UserPermission[], // Type assertion to handle the Prisma type
-          createdAt: userWithPermissions.createdAt,
-          updatedAt: userWithPermissions.updatedAt,
+          })),
+          createdAt: updatedUser.createdAt,
+          updatedAt: updatedUser.updatedAt,
         };
       });
     } catch (error: unknown) {
@@ -319,18 +383,15 @@ export const userService = {
         errorName: errorObj?.name,
         errorMessage: errorObj?.message,
         errorCode: errorObj?.code,
-        errorStack: errorObj?.stack,
-        isPrismaError: error instanceof Prisma.PrismaClientKnownRequestError,
-        isApiError: error instanceof ApiError
       });
 
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         console.error('Prisma error details:', {
           code: error.code,
           meta: error.meta,
-          message: error.message
+          message: error.message,
         });
-        
+
         if (error.code === 'P2002') {
           const meta = error.meta as { target?: string[] };
           const field = meta?.target?.[0] || 'unknown field';
@@ -340,15 +401,10 @@ export const userService = {
           throw ApiError.notFound('User not found');
         }
       }
-      
-      if (error instanceof ApiError) {
-        console.error('API Error in updateUser:', error);
-        throw error;
-      }
-      
-      console.error('Unexpected error in updateUser:', error);
-      const errorMessage = errorObj?.message || 'Unknown error';
-      throw ApiError.internal(`Failed to update user: ${errorMessage}`);
+
+      if (error instanceof ApiError) throw error;
+
+      throw ApiError.internal(`Failed to update user: ${errorObj?.message || 'Unknown error'}`);
     }
   },
 
@@ -370,12 +426,12 @@ export const userService = {
         where: { id },
       });
     } catch (error) {
+      console.error('Error deleting user:', error);
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
           throw ApiError.notFound('User not found');
         }
       }
-      console.log(error,"error")
       if (error instanceof ApiError) throw error;
       throw ApiError.internal('Failed to delete user');
     }
@@ -390,75 +446,56 @@ export const userService = {
     try {
       const user = await prisma.user.findUnique({
         where: { email: email.toLowerCase().trim() },
+        include: {
+          permissions: {
+            select: {
+              permission: true,
+            },
+          },
+        },
       });
 
       if (!user) {
         throw ApiError.unauthorized('Invalid email or password');
       }
 
+      // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         throw ApiError.unauthorized('Invalid email or password');
       }
 
       // Generate JWT token
-      // Get user with permissions
-      const userWithPermissions = await prisma.user.findUnique({
-        where: { id: user.id },
-        include: { permissions: true }
-      });
-
-      if (!userWithPermissions) {
-        throw ApiError.unauthorized('User not found');
-      }
-
       const token = jwt.sign(
-        { 
-          userId: user.id, 
-          role: user.role, 
+        {
+          userId: user.id,
           email: user.email,
-          permissions: userWithPermissions.permissions.map(p => p.permission as Permission)
+          role: user.role,
+          branch: user.branch,
+          permissions: user.permissions.map((p) => p.permission),
         },
         process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '1d' }
+        { expiresIn: '1d' },
       );
 
-      return { 
-        user: excludePassword(user), 
-        token 
+      // Return user data with permissions
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          branch: user.branch || null,
+          role: user.role,
+          permissions: user.permissions.map((p) => p.permission),
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        token,
       };
     } catch (error) {
-      console.log(error,"error")
+      console.error('Login error:', error);
       if (error instanceof ApiError) throw error;
       throw ApiError.internal('Login failed');
-    }
-  },
-
-  // Get user profile (current user)
-  getProfile: async (userId: string): Promise<SafeUser> => {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          permissions: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
-      if (!user) {
-        throw ApiError.notFound('User not found');
-      }
-
-      return user;
-    } catch (error) {
-      console.log(error,"error")
-      if (error instanceof ApiError) throw error;
-      throw ApiError.internal('Failed to fetch profile');
     }
   },
 };
