@@ -48,7 +48,7 @@ export const DashboardService = {
         startDate = startOfDay(now);
     }
 
-    // Get total revenue from COMPLETED orders only
+    // Get total revenue from PAID orders only
     const revenueResult = await prisma.order.aggregate({
       where: {
         paymentStatus: "PAID",
@@ -57,16 +57,17 @@ export const DashboardService = {
       _sum: { total: true },
     });
 
-    // Get total orders
+    // Get total orders (all orders in the system)
     const totalOrders = await prisma.order.count({
       where: {
         createdAt: { gte: startDate },
       },
     });
 
-    // Get average order value from all orders
-    const allOrders = await prisma.order.aggregate({
+    // Get average order value from paid orders only
+    const paidOrders = await prisma.order.aggregate({
       where: {
+        paymentStatus: "PAID",
         createdAt: { gte: startDate },
       },
       _avg: { total: true },
@@ -116,7 +117,7 @@ export const DashboardService = {
     const salesByCategory = await this.getSalesByCategory(startDate, now);
 
     const totalRevenue = Number(revenueResult._sum.total) || 0;
-    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const averageOrderValue = paidOrders._count > 0 ? totalRevenue / paidOrders._count : 0;
 
     return {
       totalRevenue,
@@ -153,7 +154,7 @@ export const DashboardService = {
 
       const result = await prisma.order.aggregate({
         where: {
-          status: OrderStatus.COMPLETED,
+          paymentStatus: "PAID",
           createdAt: {
             gte: dayStart,
             lte: dayEnd,
@@ -213,7 +214,6 @@ export const DashboardService = {
     const orderItems = await prisma.orderItem.findMany({
       where: {
         order: {
-          status: 'COMPLETED',
           paymentStatus: 'PAID',
           createdAt: {
             gte: startDate,

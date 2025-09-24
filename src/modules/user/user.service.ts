@@ -141,6 +141,7 @@ export const userService = {
   createManager: async (data: Omit<CreateUserInput, 'role' | 'permissions' | 'branch'> & {
     permissions?: Permission[];
     branch?: string | null;
+    role?: UserRole; // Allow role to be passed optionally
   }, currentUser: JwtPayload): Promise<SafeUser> => {
     if (currentUser.role !== UserRole.ADMIN) {
       throw ApiError.forbidden('Only admins can create managers');
@@ -161,7 +162,7 @@ export const userService = {
 
     const managerData: CreateUserInput = {
       ...data,
-      role: UserRole.MANAGER || UserRole.KITCHEN_STAFF,
+      role: data.role || UserRole.MANAGER,
       permissions: data.permissions || defaultManagerPermissions,
     };
 
