@@ -218,8 +218,9 @@ model Order {
   branchName     String?
   items          OrderItem[]
   payments       Payment[]
-  createdBy      User?          @relation("CreatedOrders", fields: [createdById], references: [id])
+  createdBy      User?           @relation("CreatedOrders", fields: [createdById], references: [id])
   createdById    String?
+  notifications  Notification[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -286,4 +287,18 @@ model MenuItemModifier {
   menuItemId String
   modifier   Modifier  @relation(fields: [modifierId], references: [id])
   modifierId String
+}
+
+model Notification {
+  id          String      @id @default(uuid())
+  type        String      // e.g., 'ORDER_CREATED', 'ORDER_UPDATED'
+  title       String
+  message     String
+  isRead      Boolean     @default(false)
+  userId      String      // The user who should receive the notification
+  createdById String?     // The user who triggered the notification
+  orderId     String?     // Reference to the related order
+  order       Order?      @relation(fields: [orderId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }

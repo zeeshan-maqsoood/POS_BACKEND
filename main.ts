@@ -2,9 +2,11 @@ import app from "./app";
 import config from "./src/config";
 import { PrismaClient, UserRole } from '@prisma/client';
 import bcrypt from 'bcrypt';
-
+import { Server } from "http";
+import { initializeSocket } from "./src/services/socket.service";
 const prisma = new PrismaClient();
 const port = config.port;
+let server:Server;
 
 async function ensureAdminUser() {
   try {
@@ -59,14 +61,34 @@ async function startServer() {
     await ensureAdminUser();
     
     // Start the server
-    app.listen(port, () => {
+   server= app.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port}`);
     });
+    initializeSocket(server);
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
   }
 }
+
+process.on('unhandledRejection',(err:Error)=>{
+  console.error('Unhandled Rejection:',err);
+  console.log(err.name,err.message)
+  if(server){
+    server.close(()=>{
+      console.log('Server closed due to unhandled rejection');
+      process.exit(1);
+    })
+  }else{
+    process.exit(1);
+  }
+})
+
+process.on("uncaughtException",(err:Error)=>{
+  console.error("Uncaught Exception:",err)
+  console.log(err.name,err.message)
+  process.exit(1)
+})
 
 // Import Permission enum after prisma client is initialized
 import { Permission } from '@prisma/client';

@@ -4,7 +4,7 @@ import { ApiResponse } from "../../utils/apiResponse";
 import { Order, OrderStatus, PaymentStatus, OrderType, PaymentMethod } from '@prisma/client';
 import { JwtPayload } from "../../types/auth.types";
 import { parseISO, isDate } from 'date-fns';
-
+import { getIo } from "../../../app";
 interface OrderQueryParams {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
@@ -43,7 +43,12 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
   try {
     const currentUser = req.user as unknown as JwtPayload;
     const order = await orderService.createOrder(req.body, currentUser) as OrderWithItems;
-    
+    const io=getIo()
+    io.emit('new-order', {
+      order,
+      createdByRole: currentUser.role,
+      message:"New order created"
+    });
     if (!order || !order.id) {
       throw new Error('Failed to create order: Invalid order data returned from service');
     }
