@@ -34,16 +34,35 @@ type OrderWithItems = Order & {
   }>;
 };
 
-// Mock implementation of printReceipt if it doesn't exist
-async function mockPrintReceipt(orderId: string): Promise<void> {  // Implementation would go here
-  console.log(`Printing receipt for order ${orderId}`);
+import { printReceipt } from "../../services/receipt.service";
+import { NotificationService } from "../../services/notification.service";
+
+// Wrapper function to handle receipt printing
+async function printOrderReceipt(orderId: string): Promise<void> {
+  console.log(`\n=== printOrderReceipt called for order ${orderId} ===`);
+  try {
+    console.log('Calling printReceipt function...');
+    const success = await printReceipt(orderId);
+    if (!success) {
+      console.error(`❌ Failed to print receipt for order ${orderId}`);
+    } else {
+      console.log(`✅ Successfully processed receipt for order ${orderId}`);
+    }
+  } catch (error: unknown) {
+    console.error(`❌ Error in printOrderReceipt for order ${orderId}:`, error);
+  }
 }
 
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const currentUser = req.user as unknown as JwtPayload;
     const order = await orderService.createOrder(req.body, currentUser) as OrderWithItems;
-    const io=getIo()
+    if (order && order.branchName) {
+      NotificationService.notifyNewOrder(order as any).catch(error => {
+        console.error('Failed to send new order notification:', error);
+      });
+    }
+      const io=getIo()
     io.emit('new-order', {
       order,
       createdByRole: currentUser.role,
@@ -52,9 +71,8 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     if (!order || !order.id) {
       throw new Error('Failed to create order: Invalid order data returned from service');
     }
-    
     // Print receipt in the background (don't await to avoid delaying the response)
-    mockPrintReceipt(order.id).catch((error: Error) => {
+    printOrderReceipt(order.id).catch((error: Error) => {
       console.error('Error printing receipt:', error);
     });
     
@@ -109,15 +127,24 @@ export const getOrders = async (req: Request<{}, {}, {}, OrderQueryParams>, res:
 };
 
 export const updatePaymentStatus = async (req: Request, res: Response) => {
+  console.log('\n=== updatePaymentStatus called ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const currentUser = req.user as unknown as JwtPayload;
     const { id } = req.params;
     const { paymentStatus, paymentMethod } = req.body;
 
+    console.log(`Processing payment update for order ${id}:`, { paymentStatus, paymentMethod });
+
     if (!paymentStatus || !paymentMethod) {
+      console.error('Missing payment status or method');
       return ApiResponse.send(res, ApiResponse.badRequest('Payment status and payment method are required'));
     }
 
+    console.log('Calling updatePaymentStatusService...');
+    
+    // First update the payment status
     const order = await orderService.updatePaymentStatusService(
       id,
       paymentStatus,
@@ -125,11 +152,18 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
       currentUser
     );
 
+    console.log('Payment status updated successfully:', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod
+    });
+
     // Print receipt when payment is completed
     if (paymentStatus === 'PAID') {
-      mockPrintReceipt(id).catch((error: Error) => {
-        console.error('Error printing receipt:', error);
-      });
+      console.log('Payment is PAID, calling printOrderReceipt...');
+      await printOrderReceipt(id);
     }
 
     ApiResponse.send(res, ApiResponse.success(order, 'Payment status updated successfully'));
@@ -146,7 +180,7 @@ export const getOrderStats = async (req: Request, res: Response) => {
       startDate: startDate && isDate(new Date(startDate as string)) ? new Date(startDate as string) : undefined,
       endDate: endDate && isDate(new Date(endDate as string)) ? new Date(endDate as string) : undefined,
     });
-
+    
     ApiResponse.send(res, ApiResponse.success(stats, "Order statistics retrieved successfully"));
   } catch (error: any) {
     console.error('Error in getOrderStats:', error);

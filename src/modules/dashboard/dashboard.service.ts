@@ -106,8 +106,13 @@ export const DashboardService = {
         total: true,
         status: true,
         createdAt: true,
+        orderNumber: true,
+        orderType: true,
+        paymentStatus: true,
+        paymentMethod: true,
       },
     });
+    console.log(recentOrders,"recent Orders");
 
     // Get revenue data for charts
     const revenueData = await this.getRevenueData(startDate, now);
@@ -133,6 +138,10 @@ export const DashboardService = {
         total: Number(order.total),
         status: order.status,
         createdAt: order.createdAt,
+        orderNumber: order.orderNumber,
+        orderType: order.orderType,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod,
       })),
       revenueData,
       orderTrends,

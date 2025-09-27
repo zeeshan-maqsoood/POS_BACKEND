@@ -18,17 +18,25 @@ export const updateCategorySchema = createCategorySchema.fork(
 export const createMenuItemSchema = Joi.object({
   name: Joi.string().required(),
   description: Joi.string().allow(""),
-  imageUrl: Joi.string().uri().optional(),
+  imageUrl: Joi.string().uri().allow('').optional(),
   price: Joi.number().required(),
-  cost: Joi.number().optional(),
+  cost: Joi.number().optional().default(0),
   taxRate: Joi.number().required(),
   taxExempt: Joi.boolean().default(false),
   isActive: Joi.boolean().default(true),
   categoryId: Joi.string().required(),
   branchName: Joi.string().optional(),
-  // modifiers: Joi.array().items(Joi.string()).optional(),
+  // Modifiers field for many-to-many relationship
+  modifiers: Joi.object({
+    connect: Joi.array().items(
+      Joi.object({
+        id: Joi.string().required()
+      })
+    )
+  }).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
 });
+
 
 export const updateMenuItemSchema = createMenuItemSchema.fork(
   Object.keys(createMenuItemSchema.describe().keys),
@@ -39,20 +47,9 @@ export const updateMenuItemSchema = createMenuItemSchema.fork(
 export const createModifierSchema = Joi.object({
   name: Joi.string().required(),
   description: Joi.string().allow(""),
-  type: Joi.string().valid("SINGLE", "MULTIPLE", "QUANTITY").default("SINGLE"),
+  price: Joi.number().min(0).default(0),
   isRequired: Joi.boolean().default(false),
-  isActive: Joi.boolean().default(true),
-  minSelection: Joi.number().integer().min(0).default(0),
-  maxSelection: Joi.number().integer().min(1).default(1),
-  options: Joi.array().items(
-    Joi.object({
-      id: Joi.string().optional(),
-      name: Joi.string().required(),
-      price: Joi.number().min(0).default(0),
-      isDefault: Joi.boolean().default(false),
-      isActive: Joi.boolean().default(true),
-    })
-  ).min(1).required()
+  isActive: Joi.boolean().default(true)
 });
 
 

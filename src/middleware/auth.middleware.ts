@@ -85,7 +85,6 @@ export const checkRole = (roles: UserRole[]): RequestHandler => {
  * 🔑 Permission-based Access Middleware
  */
 export const checkPermission = (permissions: Permission[]): RequestHandler => {
-  console.log(permissions,"permissions2222")
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ message: "Not authenticated" });

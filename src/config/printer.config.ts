@@ -1,26 +1,43 @@
 import { types, PrinterTypes, CharacterSet } from "node-thermal-printer";
+import dotenv from "dotenv";
 
-export const printerConfig: {
-  type: PrinterTypes;
-  interface: string;
-  width?: number;
-  characterSet?: CharacterSet;
-  removeSpecialCharacters?: boolean;
-  lineCharacter?: string;
-  options?: { timeout?: number };
-} = {
-  type: types.EPSON, // use enum from library
-  interface: "tcp://192.168.1.100", // replace with your printer IP
-  width: 42, // standard 80mm paper width
-  characterSet: "SLOVENIA" as CharacterSet, // ✅ assert to CharacterSet type
+dotenv.config();
+
+// Default configuration
+const defaultConfig = {
+  PRINTER_TYPE: "EPSON",
+  PRINTER_INTERFACE: "tcp://192.168.1.100",
+  PRINTER_WIDTH: 42,
+  PRINTER_CHARACTER_SET: "SLOVENIA",
+  PRINTER_TIMEOUT: 3000,
+};
+
+// Get printer type from environment or use default
+const getPrinterType = (): PrinterTypes => {
+  const type = process.env.PRINTER_TYPE || defaultConfig.PRINTER_TYPE;
+  return types[type as keyof typeof types] || types.EPSON;
+};
+
+export const printerConfig = {
+  type: getPrinterType(),
+  interface: process.env.PRINTER_INTERFACE || defaultConfig.PRINTER_INTERFACE,
+  width: parseInt(process.env.PRINTER_WIDTH || defaultConfig.PRINTER_WIDTH.toString(), 10),
+  characterSet: (process.env.PRINTER_CHARACTER_SET || defaultConfig.PRINTER_CHARACTER_SET) as CharacterSet,
   removeSpecialCharacters: true,
   lineCharacter: "=",
   options: {
-    timeout: 3000,
+    timeout: parseInt(process.env.PRINTER_TIMEOUT || defaultConfig.PRINTER_TIMEOUT.toString(), 10),
   },
 };
 
-// ✅ test if printer is reachable
+// Log printer configuration (without sensitive data)
+console.log("Printer configured with:", {
+  type: printerConfig.type,
+  width: printerConfig.width,
+  characterSet: printerConfig.characterSet,
+  timeout: printerConfig.options?.timeout,
+});
+
 import { printer as ThermalPrinter } from "node-thermal-printer";
 
 export const testPrinterConnection = async (

@@ -8,9 +8,19 @@ import routes from './src/modules';
 import { Prisma } from '@prisma/client';
 import httpStatus from 'http-status';
 const cookieParser = require('cookie-parser');
-import { Server } from 'http';
+import {Server} from "socket.io"
+import http from "http"
+
 const app = express();
-export let io:any
+const server = http.createServer(app);
+
+export const io: Server = new Server(server, {
+  cors: {
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+}) as Server;
 
 // Security middleware
 app.use(helmet());
@@ -31,20 +41,6 @@ const corsOptions: CorsOptions = {
   exposedHeaders: ['set-cookie', 'token', 'Authorization'],
 };
 
-//initialize Socket.iO
-export const initializeSocketIO=(httpServer:Server)=>{
-  const {Server}=require("socket.io")
-  io=new Server(httpServer,{
-    cors:{
-      origin:true,
-      methods:["GET","POST"],
-      credentials:true
-    },
-    path:"/socket.io/"
-  });
-  return io
-
-}
 
 // Ensure caches and proxies vary by Origin when reflecting origin
 app.use((req, res, next) => {
@@ -146,6 +142,11 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
+// Import and initialize socket service
+import { initializeSocket } from './src/services/socket.service';
+initializeSocket(io);
+
+export { server };
 export default app;
 
 export const getIo=()=>{

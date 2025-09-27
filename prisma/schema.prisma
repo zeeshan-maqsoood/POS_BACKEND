@@ -218,9 +218,8 @@ model Order {
   branchName     String?
   items          OrderItem[]
   payments       Payment[]
-  createdBy      User?           @relation("CreatedOrders", fields: [createdById], references: [id])
+  createdBy      User?          @relation("CreatedOrders", fields: [createdById], references: [id])
   createdById    String?
-  notifications  Notification[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -261,12 +260,10 @@ model Modifier {
   type          String            @default("SINGLE")
   isRequired    Boolean           @default(false)
   isActive      Boolean           @default(true)
-  minSelection  Int               @default(0)
-  maxSelection  Int               @default(1)
-  options       ModifierOption[]
   menuItems     MenuItemModifier[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
+
 }
 
 model ModifierOption {
@@ -276,10 +273,11 @@ model ModifierOption {
   isDefault   Boolean   @default(false)
   isActive    Boolean   @default(true)
   modifierId  String
-  modifier    Modifier  @relation(fields: [modifierId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+ 
 }
+
 
 model MenuItemModifier {
   id         String    @id @default(uuid())
@@ -287,18 +285,4 @@ model MenuItemModifier {
   menuItemId String
   modifier   Modifier  @relation(fields: [modifierId], references: [id])
   modifierId String
-}
-
-model Notification {
-  id          String      @id @default(uuid())
-  type        String      // e.g., 'ORDER_CREATED', 'ORDER_UPDATED'
-  title       String
-  message     String
-  isRead      Boolean     @default(false)
-  userId      String      // The user who should receive the notification
-  createdById String?     // The user who triggered the notification
-  orderId     String?     // Reference to the related order
-  order       Order?      @relation(fields: [orderId], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
 }

@@ -128,10 +128,12 @@
 // export type SocketService = ReturnType<typeof initializeSocket>;
 import { Server } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-
+import {io as ClientIo} from 'socket.io-client';
+let io:SocketIOServer;
 type UserRole = 'ADMIN' | 'MANAGER' | 'KITCHEN_STAFF' | 'CASHIER' | 'WAITER' | 'USER';
 
 interface UserConnection {
+  [x: string]: string;
   socketId: string;
   role: UserRole;
   branchId?: string;
@@ -144,13 +146,12 @@ interface Order {
 }
 
 export const initializeSocket = (server: Server) => {
-  const io = new SocketIOServer(server, {
+  io = new SocketIOServer(server, {
     cors: {
-      origin: true,
-      methods: ['GET', 'POST'],
+      origin: ["http://localhost:3000", "http://127.0.0.1:3000"], // allow both
       credentials: true
     },
-    path: '/socket.io/',
+ 
   });
 
   const userConnections = new Map<string, UserConnection>(); // userId -> UserConnection
@@ -177,12 +178,12 @@ export const initializeSocket = (server: Server) => {
 
   io.on('connection', (socket: Socket) => {
     console.log('A user connected:', socket.id);
-
+  socket.emit("welcome", { message: "Welcome to the socket server" })
     // Handle user authentication
     socket.on('authenticate', (data: { userId: string; role: UserRole; branchId?: string }) => {
       const { userId, role, branchId } = data;
       console.log(`User ${userId} (${role}) authenticated`);
-      
+      console.log(branchId,"branchId")
       userConnections.set(userId, {
         socketId: socket.id,
         role,
@@ -196,15 +197,26 @@ export const initializeSocket = (server: Server) => {
     });
 
     // Handle order creation
-    socket.on('new-order', (data: { order: Order; createdByRole: UserRole }) => {
+    socket.on('new_order', (data: { order: Order; createdByRole: UserRole }) => {
       const { order, createdByRole } = data;
-      const branchId = order.branchId;
+      let branchId = order.branchId;
       
       if (!branchId) {
         console.error('Order has no branchId');
         return;
       }
 
+      if(createdByRole==="MANAGER"||createdByRole==="KITCHEN_STAFF"){
+        const userId=[...userConnections.entries()].find(([_,conn])=>conn.socketId===socket.id)?.[0];
+        console.log(userId,"userId");
+        const userBranchId=userId?userConnections.get(userId)?.branchId:null;
+        console.log(userBranchId,"userBranchId");
+        if(!userBranchId){
+          throw new Error(`${createdByRole} has no branch assigned`)
+          return 
+        }
+        branchId=userBranchId
+      }
       if (createdByRole === 'ADMIN') {
         // Notify managers and kitchen staff
         notifyRolesInBranch(branchId, ['MANAGER', 'KITCHEN_STAFF'], 'new-order', {
@@ -225,11 +237,12 @@ export const initializeSocket = (server: Server) => {
     // Handle order updates
     socket.on('order-updated', (data: { order: Order; updatedByRole: UserRole }) => {
       const { order, updatedByRole } = data;
-      const branchId = order.branchId;
+      let branchId = order.branchId;
       
       if (!branchId) {
         console.error('Order has no branchId');
         return;
+
       }
 
       // Notify all users in the branch about the update

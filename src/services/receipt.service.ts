@@ -1,5 +1,5 @@
 import { Order, OrderItem, PrismaClient } from '@prisma/client';
-import { printerService } from './printer.service';
+import PrintService from './print.service';
 
 const prisma = new PrismaClient();
 
@@ -16,6 +16,7 @@ export interface ReceiptData {
   tax: number;
   total: number;
   paymentMethod: string;
+  paymentStatus?: string;
   branchName: string;
   tableNumber?: string;
   customerName?: string;
@@ -35,6 +36,7 @@ export const generateReceipt = (order: any): string => {
     tax: order.tax,
     total: order.total,
     paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus, // Add payment status to receipt data
     branchName: order.branchName || 'Main Branch',
     tableNumber: order.tableNumber,
     customerName: order.customerName,
@@ -81,7 +83,7 @@ const formatReceipt = (data: ReceiptData): string => {
   receipt += line + newLine;
   
   // Add payment info
-  receipt += `Payment: ${data.paymentMethod}${newLine}`;
+  receipt += `Payment: ${data.paymentMethod} (${data.paymentStatus || 'PENDING'})${newLine}`;
   if (data.tableNumber) {
     receipt += `Table: ${data.tableNumber}${newLine}`;
   }
@@ -96,25 +98,59 @@ const formatReceipt = (data: ReceiptData): string => {
 };
 
 export const printReceipt = async (orderId: string): Promise<boolean> => {
+  console.log(`\n=== START printReceipt for order ${orderId} ===`);
+  
   try {
-    const order = await prisma.order.findUnique({
+    if (!orderId) {
+      console.error('❌ No order ID provided');
+      return false;
+    }
+    
+    console.log('Fetching order from database...');
+    
+    // Get the latest version of the order with its items
+    const order = await prisma.order.findFirst({
       where: { id: orderId },
-      include: { items: true },
+      include: {
+        items: true,
+      },
+      orderBy: {
+        updatedAt: 'desc' // Get the most recent version of the order
+      }
     });
 
     if (!order) {
-      console.error('Order not found');
+      console.error('❌ Order not found in database');
       return false;
     }
+    
+    console.log('✅ Order found:', {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      itemCount: order.items?.length || 0
+    });
 
-    // Print the receipt using the printer service
-    const printSuccess = await printerService.printReceipt(order);
+    // Generate and log the receipt content
+    console.log('Generating receipt content...');
+    const receiptContent = generateReceipt(order);
     
-    if (!printSuccess) {
-      console.error('Failed to print receipt');
-      return false;
-    }
+    // Log order details for debugging
+    console.log('\n=== RECEIPT DETAILS ===');
+    console.log(`Order #${order.orderNumber}`);
+    console.log(`Status: ${order.status}`);
+    console.log(`Payment Status: ${order.paymentStatus}`);
+    console.log(`Payment Method: ${order.paymentMethod || 'Not specified'}`);
+    console.log(`Total: £${order.total?.toFixed(2) || '0.00'}`);
     
+    // Log the receipt content
+    console.log('\n--- RECEIPT CONTENT ---');
+    console.log(receiptContent);
+    console.log('--- END OF RECEIPT ---\n');
+    
+    console.log('✅ Receipt generated successfully');
     return true;
   } catch (error) {
     console.error('Error printing receipt:', error);

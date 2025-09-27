@@ -2,6 +2,7 @@
 import { OrderStatus, PaymentMethod, PaymentStatus, OrderType, UserRole, Prisma } from "@prisma/client";
 import { JwtPayload } from "../../types/auth.types";
 import { ApiError } from "../../utils/apiResponse";
+import PrintService from "../../services/print.service";
 import { 
   CreateOrderInput, 
   UpdateOrderInput, 
@@ -84,27 +85,53 @@ export const orderService = {
     }
 
     try {
-      // Calculate subtotal from items
-      const subtotal = data.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const tax = data.items.reduce((sum, item) => {
-        const itemTax = (item.price * (item.taxRate || 0) / 100) * item.quantity;
-        return sum + itemTax;
-      }, 0);
+      // Get all menu items with their tax rates
+      const menuItemIds = data.items.map(item => item.menuItemId);
+      const menuItems = await prisma.menuItem.findMany({
+        where: { id: { in: menuItemIds } },
+        select: { id: true, taxRate: true, taxExempt: true }
+      });
+
+      // Create a map of menu item IDs to their tax rates
+      const menuItemTaxInfo = new Map(
+        menuItems.map(item => [item.id, { 
+          taxRate: item.taxExempt ? 0 : item.taxRate,
+          taxExempt: item.taxExempt
+        }])
+      );
+
+      // Calculate order items with proper tax
+      const orderItems = data.items.map(item => {
+        const itemInfo = menuItemTaxInfo.get(item.menuItemId) || { taxRate: 0, taxExempt: false };
+        const itemSubtotal = item.price * item.quantity;
+        const itemTax = itemInfo.taxExempt ? 0 : (itemSubtotal * (itemInfo.taxRate || 0)) / 100;
+        
+        const payload= {
+          menuItemId: item.menuItemId,
+          name: item.name || `Item ${item.menuItemId}`,
+          price: item.price,
+          quantity: item.quantity,
+          taxRate: itemInfo.taxRate,
+          tax: itemTax,
+          total: itemSubtotal + itemTax,
+          notes: item.notes,
+          modifiers: item.modifiers
+        };
+        return payload;
+      });
+
+      // Calculate order totals
+      const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
       const total = subtotal + tax - (data.discount || 0);
 
       // Generate a unique order number if not provided
       const orderNumber = data.orderNumber || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
       
-      // First verify all menu items exist
-      const menuItemIds = data.items.map(item => item.menuItemId);
-      const existingItems = await prisma.menuItem.findMany({
-        where: { id: { in: menuItemIds } },
-        select: { id: true }
-      });
-
-      if (existingItems.length !== menuItemIds.length) {
-        const existingIds = new Set(existingItems.map(item => item.id));
-        const missingIds = menuItemIds.filter(id => !existingIds.has(id));
+      // Verify all menu items exist
+      if (menuItems.length !== new Set(menuItemIds).size) {
+        const foundIds = new Set(menuItems.map(item => item.id));
+        const missingIds = menuItemIds.filter(id => !foundIds.has(id));
         throw ApiError.badRequest(`The following menu items do not exist: ${missingIds.join(', ')}`);
       }
       
@@ -118,35 +145,46 @@ export const orderService = {
           paymentMethod: data.paymentMethod,
           subtotal,
           tax,
-          discount: data.discount || 0,
           total,
           tableNumber: data.tableNumber,
           customerName: data.customerName,
           customerEmail: data.customerEmail,
           customerPhone: data.customerPhone,
-          branchName: data.branchName, // ✅ Add branchName to order creation
           notes: data.notes,
+          branchName: data.branchName,
           createdById: currentUser.userId,
           items: {
-            create: data.items.map((item) => ({
+            create: orderItems.map(item => ({
               id: randomUUID(),
               menuItemId: item.menuItemId,
-              name: item.name || 'Unnamed Item',
-              quantity: item.quantity,
+              name: item.name,
               price: item.price,
-              taxRate: item.taxRate || 0,
-              tax: (item.price * (item.taxRate || 0) / 100) * item.quantity,
-              total: item.quantity * item.price,
+              quantity: item.quantity,
+              taxRate: item.taxRate,
+              tax: item.tax,
+              total: item.total,
               notes: item.notes,
-            })),
-          },
+              modifiers: item.modifiers
+            }))
+          }
         },
-        include: { items: true },
+        include: {
+          items: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
       });
+      // console.log(order,"order");
 
       return order;
     } catch (error) {
-      throw ApiError.internal("Failed to create order");
+      console.error('Error creating order:', error);
+      throw ApiError.internal('Failed to create order');
     }
   },
 
@@ -242,7 +280,7 @@ console.log(where,"where")
       skip,
       take: pageSize,
     });
-    console.log(orders,"orders")
+    // console.log(orders,"orders")
 
     return {
       data: orders,
@@ -280,7 +318,7 @@ console.log(where,"where")
       where: { id: currentUser.userId },
       select: { branch: true, role: true, id: true }
     });
-console.log(order,"order")
+// console.log(order,"order")
     if (!user) throw ApiError.notFound('User not found');
 
     // If user is a manager
@@ -445,6 +483,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
     }
 
     const { items, ...orderData } = data;
+    // console.log(orderData,"orderData")
     
     // Verify user has access to the branch if branchName is provided
     if (orderData.branchName) {
@@ -453,7 +492,12 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
     // Generate order number if not provided
     if (!orderData.orderNumber) {
-      orderData.orderNumber = `ORD-${Date.now()}`;
+      // Generate a unique order number with timestamp and random string
+      const timestamp = Date.now().toString().slice(-6);
+      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+      orderData.orderNumber = `ORD-${timestamp}-${randomStr}`;
+    } else if (typeof orderData.orderNumber !== 'string' || orderData.orderNumber.trim() === '') {
+      throw new Error('Invalid order number format');
     }
 
     // Set default status if not provided
@@ -470,9 +514,9 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
         const price = parseFloat(item.price.toString()) || 0;
         const taxRate = parseFloat((item.taxRate || 0).toString());
         const subtotal = price * quantity;
-        const tax = subtotal * (taxRate / 100);
+        const tax = orderData.tax;
         const total = subtotal + tax;
-
+// console.log(item,"item")
         return {
           ...item,
           quantity,
@@ -485,10 +529,12 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       });
 
       // Calculate order totals
-      const subtotal = itemsWithTotals.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const taxTotal = itemsWithTotals.reduce((sum, item) => sum + (item.tax || 0), 0);
+      const subtotal = orderData.subtotal;
+      const taxTotal = orderData.tax;
       const total = subtotal + taxTotal - (orderData.discount || 0);
-
+console.log(subtotal,"subtotal")
+console.log(taxTotal,"taxTotal")
+console.log(total,"total")
       // Update order data with calculated totals
       const orderWithTotals = {
         ...orderData,
@@ -528,6 +574,11 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       });
 
       return createdOrder;
+    });
+
+    // Print the receipt in the background (don't await to avoid blocking the response)
+    PrintService.printOrderReceipt(order).catch(error => {
+      console.error('Failed to print receipt:', error);
     });
 
     return order as unknown as OrderWithItems;
@@ -644,7 +695,7 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
     skip,
     take: pageSize,
   });
-  console.log(orders,"orders")
+  // console.log(orders,"orders")
 
   return {
     data: orders,
@@ -705,8 +756,29 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
         paymentStatus,
         paymentMethod
       },
-      include: { items: true }
+      include: { 
+        items: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
     });
+
+    // Print receipt when payment status is updated to PAID
+    if (paymentStatus === 'PAID') {
+      try {
+        await PrintService.printOrderReceipt(updatedOrder);
+        console.log('Receipt printed successfully for order:', updatedOrder.orderNumber);
+      } catch (printError) {
+        console.error('Failed to print receipt:', printError);
+        // Don't fail the whole operation if printing fails
+      }
+    }
 
     return updatedOrder;
   } catch (error) {
@@ -714,7 +786,6 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
     throw new Error('Failed to update payment status');
   }
 }
-
 
 export function getOrderStatsService(arg0: { startDate: Date | undefined; endDate: Date | undefined; }) {
   throw new Error("Function not implemented.");
