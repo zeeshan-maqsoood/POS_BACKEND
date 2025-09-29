@@ -1,4 +1,4 @@
-import { Permission } from '@prisma/client';
+import { UserRole, Permission } from '@prisma/client';
 import { JwtPayload } from '../../types/auth.types';
 import { CreateUserInput, UpdateUserInput, SafeUser } from '../../types/user.types';
 type LoginResponse = {
@@ -12,6 +12,7 @@ export declare const userService: {
     createManager: (data: Omit<CreateUserInput, "role" | "permissions" | "branch"> & {
         permissions?: Permission[];
         branch?: string | null;
+        role?: UserRole;
     }, currentUser: JwtPayload) => Promise<SafeUser>;
     getAllUsers: (currentUser: JwtPayload) => Promise<SafeUser[]>;
     getUserById: (id: string, currentUser: JwtPayload) => Promise<SafeUser | null>;

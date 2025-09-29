@@ -8,19 +8,19 @@ import routes from './src/modules';
 import { Prisma } from '@prisma/client';
 import httpStatus from 'http-status';
 const cookieParser = require('cookie-parser');
-import {Server} from "socket.io"
-import http from "http"
+import { Server as SocketIOServer } from "socket.io";
+import { createServer } from "http";
 
 const app = express();
-const server = http.createServer(app);
+const server = createServer(app);
 
-export const io: Server = new Server(server, {
+export const io = new SocketIOServer(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST'],
     credentials: true
   }
-}) as Server;
+});
 
 // Security middleware
 app.use(helmet());
@@ -144,7 +144,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
 // Import and initialize socket service
 import { initializeSocket } from './src/services/socket.service';
-initializeSocket(io);
+initializeSocket(server);
 
 export { server };
 export default app;

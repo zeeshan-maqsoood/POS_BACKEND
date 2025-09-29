@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.printReceipt = exports.generateReceipt = void 0;
 const client_1 = require("@prisma/client");
-const printer_service_1 = require("./printer.service");
 const prisma = new client_1.PrismaClient();
 const generateReceipt = (order) => {
     const data = {
@@ -18,6 +17,7 @@ const generateReceipt = (order) => {
         tax: order.tax,
         total: order.total,
         paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus, // Add payment status to receipt data
         branchName: order.branchName || 'Main Branch',
         tableNumber: order.tableNumber,
         customerName: order.customerName,
@@ -58,7 +58,7 @@ const formatReceipt = (data) => {
     receipt += `TOTAL:${''.padStart(21)}${formatCurrency(data.total).padStart(12)}${newLine}`;
     receipt += line + newLine;
     // Add payment info
-    receipt += `Payment: ${data.paymentMethod}${newLine}`;
+    receipt += `Payment: ${data.paymentMethod} (${data.paymentStatus || 'PENDING'})${newLine}`;
     if (data.tableNumber) {
         receipt += `Table: ${data.tableNumber}${newLine}`;
     }
@@ -71,21 +71,50 @@ const formatReceipt = (data) => {
     return receipt;
 };
 const printReceipt = async (orderId) => {
+    console.log(`\n=== START printReceipt for order ${orderId} ===`);
     try {
-        const order = await prisma.order.findUnique({
+        if (!orderId) {
+            console.error('❌ No order ID provided');
+            return false;
+        }
+        console.log('Fetching order from database...');
+        // Get the latest version of the order with its items
+        const order = await prisma.order.findFirst({
             where: { id: orderId },
-            include: { items: true },
+            include: {
+                items: true,
+            },
+            orderBy: {
+                updatedAt: 'desc' // Get the most recent version of the order
+            }
         });
         if (!order) {
-            console.error('Order not found');
+            console.error('❌ Order not found in database');
             return false;
         }
-        // Print the receipt using the printer service
-        const printSuccess = await printer_service_1.printerService.printReceipt(order);
-        if (!printSuccess) {
-            console.error('Failed to print receipt');
-            return false;
-        }
+        console.log('✅ Order found:', {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            paymentMethod: order.paymentMethod,
+            itemCount: order.items?.length || 0
+        });
+        // Generate and log the receipt content
+        console.log('Generating receipt content...');
+        const receiptContent = (0, exports.generateReceipt)(order);
+        // Log order details for debugging
+        console.log('\n=== RECEIPT DETAILS ===');
+        console.log(`Order #${order.orderNumber}`);
+        console.log(`Status: ${order.status}`);
+        console.log(`Payment Status: ${order.paymentStatus}`);
+        console.log(`Payment Method: ${order.paymentMethod || 'Not specified'}`);
+        console.log(`Total: £${order.total?.toFixed(2) || '0.00'}`);
+        // Log the receipt content
+        console.log('\n--- RECEIPT CONTENT ---');
+        console.log(receiptContent);
+        console.log('--- END OF RECEIPT ---\n');
+        console.log('✅ Receipt generated successfully');
         return true;
     }
     catch (error) {

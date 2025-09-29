@@ -1,7 +1,7 @@
 // import { Server } from 'http';
 // import { Server as SocketIOServer, Socket } from 'socket.io';
 
-// export const initializeSocket = (server: Server) => {
+// export const initializeSocket = (server: HttpServer) => {
 //   const io = new SocketIOServer(server, {
 //     cors: {
 //       origin: true, // Allow all origins in development
@@ -124,28 +124,27 @@
 //     userBranches
 //   };
 // };
-
 // export type SocketService = ReturnType<typeof initializeSocket>;
-import { Server } from 'http';
+import { createServer } from 'http';
+import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import {io as ClientIo} from 'socket.io-client';
+import { io as ClientIo } from 'socket.io-client';
 let io:SocketIOServer;
-type UserRole = 'ADMIN' | 'MANAGER' | 'KITCHEN_STAFF' | 'CASHIER' | 'WAITER' | 'USER';
+export type UserRole = 'ADMIN' | 'MANAGER' | 'KITCHEN_STAFF' | 'CASHIER' | 'WAITER' | 'USER';
 
-interface UserConnection {
-  [x: string]: string;
+export interface UserConnection {
   socketId: string;
   role: UserRole;
-  branchId?: string;
+  branchId?: string; // Made branchId optional
+  [key: string]: string | undefined; // Updated to allow undefined for optional properties
 }
 
 interface Order {
   id: string;
   branchId: string;
-  // Add other order properties as needed
 }
 
-export const initializeSocket = (server: Server) => {
+export const initializeSocket = (server: HttpServer) => {
   io = new SocketIOServer(server, {
     cors: {
       origin: ["http://localhost:3000", "http://127.0.0.1:3000"], // allow both
@@ -159,10 +158,11 @@ export const initializeSocket = (server: Server) => {
   // Helper to get all users in a branch
   const getUsersInBranch = (branchId: string) => {
     return Array.from(userConnections.entries())
-      .filter(([_, conn]) => conn.branchId === branchId)
+      .filter(([_, conn]) => conn.branchId && conn.branchId === branchId)
       .map(([userId, conn]) => ({
         userId,
-        ...conn
+        ...conn,
+        branchId: conn.branchId! // We know branchId is defined here due to the filter
       }));
   };
 
@@ -184,11 +184,18 @@ export const initializeSocket = (server: Server) => {
       const { userId, role, branchId } = data;
       console.log(`User ${userId} (${role}) authenticated`);
       console.log(branchId,"branchId")
-      userConnections.set(userId, {
-        socketId: socket.id,
-        role,
-        branchId
-      });
+      if (branchId) {
+        userConnections.set(userId, {
+          socketId: socket.id,
+          role,
+          branchId
+        });
+      } else {
+        userConnections.set(userId, {
+          socketId: socket.id,
+          role
+        });
+      }
 
       if (branchId) {
         socket.join(`branch-${branchId}`);
@@ -270,7 +277,7 @@ export const initializeSocket = (server: Server) => {
   return {
     io,
     getUserConnections: () => new Map(userConnections)
-  };
+  } as const;
 };
 
 export type SocketService = ReturnType<typeof initializeSocket>;

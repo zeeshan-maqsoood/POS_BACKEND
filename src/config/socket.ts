@@ -1,9 +1,9 @@
-import { Server } from 'http';
-import { initializeSocket, SocketService } from '../services/socket.service';
+import { Server as HttpServer } from 'http';
+import { initializeSocket, type SocketService } from '../services/socket.service';
 
 let socketService: SocketService;
 
-export const setupSocket = (server: Server) => {
+export const setupSocket = (server: HttpServer) => {
   socketService = initializeSocket(server);
   return socketService;
 };

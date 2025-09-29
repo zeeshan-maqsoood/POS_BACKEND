@@ -130,11 +130,22 @@ export declare const menuItemService: {
             isActive: boolean;
             branchName: string | null;
         };
-        modifiers: {
+        modifiers: ({
+            modifier: {
+                id: string;
+                name: string;
+                createdAt: Date;
+                updatedAt: Date;
+                description: string | null;
+                isActive: boolean;
+                type: string;
+                isRequired: boolean;
+            };
+        } & {
             id: string;
-            modifierId: string;
             menuItemId: string;
-        }[];
+            modifierId: string;
+        })[];
     } & {
         id: string;
         name: string;
@@ -164,8 +175,8 @@ export declare const menuItemService: {
         };
         modifiers: {
             id: string;
-            modifierId: string;
             menuItemId: string;
+            modifierId: string;
         }[];
     } & {
         id: string;
@@ -196,8 +207,8 @@ export declare const menuItemService: {
         };
         modifiers: {
             id: string;
-            modifierId: string;
             menuItemId: string;
+            modifierId: string;
         }[];
     } & {
         id: string;
@@ -228,8 +239,8 @@ export declare const menuItemService: {
         };
         modifiers: {
             id: string;
-            modifierId: string;
             menuItemId: string;
+            modifierId: string;
         }[];
     } & {
         id: string;
@@ -266,17 +277,6 @@ export declare const menuItemService: {
 };
 export declare const modifierService: {
     create(data: any): Promise<{
-        options: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            isActive: boolean;
-            price: number;
-            modifierId: string;
-            isDefault: boolean;
-        }[];
-    } & {
         id: string;
         name: string;
         createdAt: Date;
@@ -285,21 +285,8 @@ export declare const modifierService: {
         isActive: boolean;
         type: string;
         isRequired: boolean;
-        minSelection: number;
-        maxSelection: number;
     }>;
-    list(): Promise<({
-        options: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            isActive: boolean;
-            price: number;
-            modifierId: string;
-            isDefault: boolean;
-        }[];
-    } & {
+    list(): Promise<{
         id: string;
         name: string;
         createdAt: Date;
@@ -308,21 +295,8 @@ export declare const modifierService: {
         isActive: boolean;
         type: string;
         isRequired: boolean;
-        minSelection: number;
-        maxSelection: number;
-    })[]>;
-    get(id: string): Promise<({
-        options: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            isActive: boolean;
-            price: number;
-            modifierId: string;
-            isDefault: boolean;
-        }[];
-    } & {
+    }[]>;
+    get(id: string): Promise<{
         id: string;
         name: string;
         createdAt: Date;
@@ -331,21 +305,8 @@ export declare const modifierService: {
         isActive: boolean;
         type: string;
         isRequired: boolean;
-        minSelection: number;
-        maxSelection: number;
-    }) | null>;
+    } | null>;
     update(id: string, data: any): Promise<{
-        options: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            isActive: boolean;
-            price: number;
-            modifierId: string;
-            isDefault: boolean;
-        }[];
-    } & {
         id: string;
         name: string;
         createdAt: Date;
@@ -354,8 +315,6 @@ export declare const modifierService: {
         isActive: boolean;
         type: string;
         isRequired: boolean;
-        minSelection: number;
-        maxSelection: number;
     }>;
     remove(id: string): Promise<{
         id: string;
@@ -366,7 +325,5 @@ export declare const modifierService: {
         isActive: boolean;
         type: string;
         isRequired: boolean;
-        minSelection: number;
-        maxSelection: number;
     }>;
 };

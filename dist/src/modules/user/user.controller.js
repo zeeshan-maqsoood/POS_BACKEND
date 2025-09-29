@@ -198,7 +198,6 @@ const login = async (req, res) => {
 };
 exports.login = login;
 const getProfile = async (req, res) => {
-    console.log(req.user, "user");
     try {
         if (!req.user?.userId) {
             throw apiResponse_1.ApiError.unauthorized('User not authenticated');

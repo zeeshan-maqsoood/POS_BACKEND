@@ -7,8 +7,10 @@ const app_1 = __importDefault(require("./app"));
 const config_1 = __importDefault(require("./src/config"));
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const socket_service_1 = require("./src/services/socket.service");
 const prisma = new client_1.PrismaClient();
 const port = config_1.default.port;
+let server;
 async function ensureAdminUser() {
     try {
         // Check if admin user already exists
@@ -54,15 +56,35 @@ async function startServer() {
         // Ensure admin user exists
         await ensureAdminUser();
         // Start the server
-        app_1.default.listen(port, () => {
+        server = app_1.default.listen(port, () => {
             console.log(`🚀 Server running on http://localhost:${port}`);
         });
+        const io = (0, socket_service_1.initializeSocket)(server);
+        return io;
     }
     catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
     }
 }
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Rejection:', err);
+    console.log(err.name, err.message);
+    if (server) {
+        server.close(() => {
+            console.log('Server closed due to unhandled rejection');
+            process.exit(1);
+        });
+    }
+    else {
+        process.exit(1);
+    }
+});
+process.on("uncaughtException", (err) => {
+    console.error("Uncaught Exception:", err);
+    console.log(err.name, err.message);
+    process.exit(1);
+});
 // Import Permission enum after prisma client is initialized
 const client_2 = require("@prisma/client");
 // Start the application

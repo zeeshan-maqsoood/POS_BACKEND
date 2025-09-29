@@ -1,13 +1,13 @@
-import { PrinterTypes, CharacterSet } from "node-thermal-printer";
+import { types, CharacterSet } from "node-thermal-printer";
 export declare const printerConfig: {
-    type: PrinterTypes;
+    type: types;
     interface: string;
-    width?: number;
-    characterSet?: CharacterSet;
-    removeSpecialCharacters?: boolean;
-    lineCharacter?: string;
-    options?: {
-        timeout?: number;
+    width: number;
+    characterSet: CharacterSet;
+    removeSpecialCharacters: boolean;
+    lineCharacter: string;
+    options: {
+        timeout: number;
     };
 };
 import { printer as ThermalPrinter } from "node-thermal-printer";

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { printReceipt } from '../services/receipt.service';
-import { authenticateJwt } from '../middleware/auth.middleware';
-import ApiResponse from '../utils/apiResponse';
+import { authenticateJWT } from '../middleware/auth.middleware';
+import { ApiResponse } from '../utils/apiResponse';
 
 export const testPrintRouter = Router();
 
@@ -9,7 +9,7 @@ export const testPrintRouter = Router();
 // GET /api/orders/test-print/:orderId
 testPrintRouter.get(
   '/test-print/:orderId',
-  authenticateJwt,
+  authenticateJWT,
   async (req, res) => {
     try {
       const { orderId } = req.params;

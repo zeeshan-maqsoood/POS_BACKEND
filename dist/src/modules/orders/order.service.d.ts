@@ -15,6 +15,11 @@ type OrderWithItems = Prisma.OrderGetPayload<{
 }>;
 export declare const orderService: {
     createOrder: (data: CreateOrderInput, currentUser: JwtPayload) => Promise<{
+        createdBy: {
+            email: string;
+            id: string;
+            name: string | null;
+        } | null;
         items: {
             id: string;
             name: string;
@@ -199,6 +204,12 @@ export declare function getOrdersService(params: GetOrdersServiceParams, current
     };
 }>;
 export declare function updatePaymentStatusService(id: string, paymentStatus: PaymentStatus, paymentMethod: PaymentMethod, currentUser?: JwtPayload): Promise<{
+    createdBy: {
+        email: string;
+        role: import(".prisma/client").$Enums.UserRole;
+        id: string;
+        name: string | null;
+    } | null;
     items: {
         id: string;
         name: string;

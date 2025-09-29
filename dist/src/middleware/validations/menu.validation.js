@@ -18,15 +18,20 @@ exports.updateCategorySchema = exports.createCategorySchema.fork(Object.keys(exp
 exports.createMenuItemSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
     description: joi_1.default.string().allow(""),
-    imageUrl: joi_1.default.string().uri().optional(),
+    imageUrl: joi_1.default.string().uri().allow('').optional(),
     price: joi_1.default.number().required(),
-    cost: joi_1.default.number().optional(),
+    cost: joi_1.default.number().optional().default(0),
     taxRate: joi_1.default.number().required(),
     taxExempt: joi_1.default.boolean().default(false),
     isActive: joi_1.default.boolean().default(true),
     categoryId: joi_1.default.string().required(),
     branchName: joi_1.default.string().optional(),
-    // modifiers: Joi.array().items(Joi.string()).optional(),
+    // Modifiers field for many-to-many relationship
+    modifiers: joi_1.default.object({
+        connect: joi_1.default.array().items(joi_1.default.object({
+            id: joi_1.default.string().required()
+        }))
+    }).optional(),
     tags: joi_1.default.array().items(joi_1.default.string()).optional(),
 });
 exports.updateMenuItemSchema = exports.createMenuItemSchema.fork(Object.keys(exports.createMenuItemSchema.describe().keys), (field) => field.optional());
@@ -34,18 +39,9 @@ exports.updateMenuItemSchema = exports.createMenuItemSchema.fork(Object.keys(exp
 exports.createModifierSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
     description: joi_1.default.string().allow(""),
-    type: joi_1.default.string().valid("SINGLE", "MULTIPLE", "QUANTITY").default("SINGLE"),
+    price: joi_1.default.number().min(0).default(0),
     isRequired: joi_1.default.boolean().default(false),
-    isActive: joi_1.default.boolean().default(true),
-    minSelection: joi_1.default.number().integer().min(0).default(0),
-    maxSelection: joi_1.default.number().integer().min(1).default(1),
-    options: joi_1.default.array().items(joi_1.default.object({
-        id: joi_1.default.string().optional(),
-        name: joi_1.default.string().required(),
-        price: joi_1.default.number().min(0).default(0),
-        isDefault: joi_1.default.boolean().default(false),
-        isActive: joi_1.default.boolean().default(true),
-    })).min(1).required()
+    isActive: joi_1.default.boolean().default(true)
 });
 exports.updateModifierSchema = exports.createModifierSchema.fork(Object.keys(exports.createModifierSchema.describe().keys), (field) => field.optional());
 //# sourceMappingURL=menu.validation.js.map

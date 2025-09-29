@@ -195,22 +195,30 @@ exports.menuItemService = {
         else if (user?.role === 'ADMIN' && !itemData.branchName) {
             throw new Error('Branch is required when creating menu items as admin');
         }
-        return prisma.menuItem.create({
-            data: {
-                ...itemData,
-                modifiers: modifiers
-                    ? {
-                        create: modifiers.map((m) => ({
-                            name: m.name,
-                            price: m.price,
-                            isActive: m.isActive ?? true,
-                        })),
+        // Prepare the create data
+        const createData = { ...itemData };
+        // Handle modifiers if they exist
+        if (modifiers && modifiers.connect) {
+            // For many-to-many relationship using connect
+            createData.modifiers = {
+                create: modifiers.connect.map(({ id }) => ({
+                    modifier: {
+                        connect: { id }
                     }
-                    : undefined,
-            },
+                    // No additional fields needed as per the Prisma schema
+                    // The MenuItemModifier is a pure join table
+                }))
+            };
+        }
+        return prisma.menuItem.create({
+            data: createData,
             include: {
                 category: true,
-                modifiers: true
+                modifiers: {
+                    include: {
+                        modifier: true
+                    }
+                }
             },
         });
     },
@@ -375,47 +383,20 @@ exports.menuItemService = {
 // --- Modifier ---
 exports.modifierService = {
     async create(data) {
-        const { options, ...modifierData } = data;
         return prisma.modifier.create({
-            data: {
-                ...modifierData,
-                options: {
-                    create: options?.map((o) => ({
-                        name: o.name,
-                        price: o.price,
-                        isDefault: o.isDefault ?? false,
-                        isActive: o.isActive ?? true,
-                    })) ?? [],
-                },
-            },
-            include: { options: true },
+            data,
         });
     },
     async list() {
-        return prisma.modifier.findMany({ include: { options: true } });
+        return prisma.modifier.findMany();
     },
     async get(id) {
-        return prisma.modifier.findUnique({ where: { id }, include: { options: true } });
+        return prisma.modifier.findUnique({ where: { id } });
     },
     async update(id, data) {
-        const { options, ...modifierData } = data;
         return prisma.modifier.update({
             where: { id },
-            data: {
-                ...modifierData,
-                options: options
-                    ? {
-                        deleteMany: {}, // remove existing options
-                        create: options.map((o) => ({
-                            name: o.name,
-                            price: o.price,
-                            isDefault: o.isDefault ?? false,
-                            isActive: o.isActive ?? true,
-                        })),
-                    }
-                    : undefined,
-            },
-            include: { options: true },
+            data,
         });
     },
     async remove(id) {

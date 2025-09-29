@@ -136,7 +136,7 @@ exports.userService = {
         ];
         const managerData = {
             ...data,
-            role: client_1.UserRole.MANAGER || client_1.UserRole.KITCHEN_STAFF,
+            role: data.role || client_1.UserRole.MANAGER,
             permissions: data.permissions || defaultManagerPermissions,
         };
         // Only include branch if it's provided

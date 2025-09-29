@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getIo = exports.server = exports.io = void 0;
 const express_1 = __importDefault(require("express"));
 const morgan_1 = __importDefault(require("morgan"));
 const cors_1 = __importDefault(require("cors"));
@@ -11,7 +12,18 @@ const modules_1 = __importDefault(require("./src/modules"));
 const client_1 = require("@prisma/client");
 const http_status_1 = __importDefault(require("http-status"));
 const cookieParser = require('cookie-parser');
+const socket_io_1 = require("socket.io");
+const http_1 = require("http");
 const app = (0, express_1.default)();
+const server = (0, http_1.createServer)(app);
+exports.server = server;
+exports.io = new socket_io_1.Server(server, {
+    cors: {
+        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
+});
 // Security middleware
 app.use((0, helmet_1.default)());
 // CORS configuration - Allow all origins while supporting credentials
@@ -113,5 +125,15 @@ app.use((err, _req, res, _next) => {
         message,
     });
 });
+// Import and initialize socket service
+const socket_service_1 = require("./src/services/socket.service");
+(0, socket_service_1.initializeSocket)(server);
 exports.default = app;
+const getIo = () => {
+    if (!exports.io) {
+        throw new Error("Socket.io not initialized");
+    }
+    return exports.io;
+};
+exports.getIo = getIo;
 //# sourceMappingURL=app.js.map

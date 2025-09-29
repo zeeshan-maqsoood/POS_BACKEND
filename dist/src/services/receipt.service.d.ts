@@ -11,6 +11,7 @@ export interface ReceiptData {
     tax: number;
     total: number;
     paymentMethod: string;
+    paymentStatus?: string;
     branchName: string;
     tableNumber?: string;
     customerName?: string;

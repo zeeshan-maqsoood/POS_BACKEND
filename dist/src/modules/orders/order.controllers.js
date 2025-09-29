@@ -37,19 +37,46 @@ exports.deleteOrder = exports.updateOrderStatus = exports.getOrderById = exports
 const orderService = __importStar(require("./order.service"));
 const apiResponse_1 = require("../../utils/apiResponse");
 const date_fns_1 = require("date-fns");
-// Mock implementation of printReceipt if it doesn't exist
-async function mockPrintReceipt(orderId) {
-    console.log(`Printing receipt for order ${orderId}`);
+const app_1 = require("../../../app");
+const receipt_service_1 = require("../../services/receipt.service");
+const notification_service_1 = require("../../services/notification.service");
+// Wrapper function to handle receipt printing
+async function printOrderReceipt(orderId) {
+    console.log(`\n=== printOrderReceipt called for order ${orderId} ===`);
+    try {
+        console.log('Calling printReceipt function...');
+        const success = await (0, receipt_service_1.printReceipt)(orderId);
+        if (!success) {
+            console.error(`❌ Failed to print receipt for order ${orderId}`);
+        }
+        else {
+            console.log(`✅ Successfully processed receipt for order ${orderId}`);
+        }
+    }
+    catch (error) {
+        console.error(`❌ Error in printOrderReceipt for order ${orderId}:`, error);
+    }
 }
 const createOrder = async (req, res) => {
     try {
         const currentUser = req.user;
         const order = await orderService.createOrder(req.body, currentUser);
+        if (order && order.branchName) {
+            notification_service_1.NotificationService.notifyNewOrder(order).catch(error => {
+                console.error('Failed to send new order notification:', error);
+            });
+        }
+        const io = (0, app_1.getIo)();
+        io.emit('new-order', {
+            order,
+            createdByRole: currentUser.role,
+            message: "New order created"
+        });
         if (!order || !order.id) {
             throw new Error('Failed to create order: Invalid order data returned from service');
         }
         // Print receipt in the background (don't await to avoid delaying the response)
-        mockPrintReceipt(order.id).catch((error) => {
+        printOrderReceipt(order.id).catch((error) => {
             console.error('Error printing receipt:', error);
         });
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, "Order created successfully", 201));
@@ -88,19 +115,31 @@ const getOrders = async (req, res) => {
 };
 exports.getOrders = getOrders;
 const updatePaymentStatus = async (req, res) => {
+    console.log('\n=== updatePaymentStatus called ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     try {
         const currentUser = req.user;
         const { id } = req.params;
         const { paymentStatus, paymentMethod } = req.body;
+        console.log(`Processing payment update for order ${id}:`, { paymentStatus, paymentMethod });
         if (!paymentStatus || !paymentMethod) {
+            console.error('Missing payment status or method');
             return apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.badRequest('Payment status and payment method are required'));
         }
+        console.log('Calling updatePaymentStatusService...');
+        // First update the payment status
         const order = await orderService.updatePaymentStatusService(id, paymentStatus, paymentMethod, currentUser);
+        console.log('Payment status updated successfully:', {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            paymentMethod: order.paymentMethod
+        });
         // Print receipt when payment is completed
         if (paymentStatus === 'PAID') {
-            mockPrintReceipt(id).catch((error) => {
-                console.error('Error printing receipt:', error);
-            });
+            console.log('Payment is PAID, calling printOrderReceipt...');
+            await printOrderReceipt(id);
         }
         apiResponse_1.ApiResponse.send(res, apiResponse_1.ApiResponse.success(order, 'Payment status updated successfully'));
     }
