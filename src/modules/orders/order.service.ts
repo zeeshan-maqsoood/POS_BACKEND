@@ -50,143 +50,144 @@ const checkBranchAccess = async (userId: string, branchName: string) => {
 };
 
 export const orderService = {
-  createOrder: async (data: CreateOrderInput, currentUser: JwtPayload) => {
-    if (!data.tableNumber && !data.customerName) {
-      throw ApiError.badRequest("Order must have either a table number or customer name");
-    }
+  // createOrder: async (data: CreateOrderInput, currentUser: JwtPayload) => {
+  //   if (!data.tableNumber && !data.customerName) {
+  //     throw ApiError.badRequest("Order must have either a table number or customer name");
+  //   }
     
-    // Get user's details
-    const user = await prisma.user.findUnique({
-      where: { id: currentUser.userId },
-      select: { branch: true, role: true }
-    });
+  //   console.log(currentUser,"currentUser")
+  //   // Get user's details
+  //   const user = await prisma.user.findUnique({
+  //     where: { id: currentUser.userId },
+  //     select: { branch: true, role: true }
+  //   });
 
-    if (!user) throw ApiError.notFound('User not found');
+  //   if (!user) throw ApiError.notFound('User not found');
     
-    // Kitchen staff cannot create orders
-    if (user.role === 'KITCHEN_STAFF') {
-      throw ApiError.forbidden('Kitchen staff cannot create orders');
-    }
+  //   // Kitchen staff cannot create orders
+  //   if (user.role === 'KITCHEN_STAFF') {
+  //     throw ApiError.forbidden('Kitchen staff cannot create orders');
+  //   }
     
-    // If user is a manager and no branch is specified, use their branch
-    if (user.role === 'MANAGER' && !data.branchName && user.branch) {
-      data.branchName = user.branch;
-    }
+  //   // If user is a manager and no branch is specified, use their branch
+  //   if (user.role === 'MANAGER' && !data.branchName && user.branch) {
+  //     data.branchName = user.branch;
+  //   }
     
-    // If branch is provided or set from manager, verify the user has access to it
-    if (data.branchName) {
-      // For managers, we already know they have access to their own branch
-      if (!(user.role === 'MANAGER' && user.branch === data.branchName)) {
-        const hasAccess = await checkBranchAccess(currentUser.userId, data.branchName);
-        if (!hasAccess) {
-          throw ApiError.forbidden('You do not have permission to create orders for this branch');
-        }
-      }
-    }
+  //   // If branch is provided or set from manager, verify the user has access to it
+  //   if (data.branchName) {
+  //     // For managers, we already know they have access to their own branch
+  //     if (!(user.role === 'MANAGER' && user.branch === data.branchName)) {
+  //       const hasAccess = await checkBranchAccess(currentUser.userId, data.branchName);
+  //       if (!hasAccess) {
+  //         throw ApiError.forbidden('You do not have permission to create orders for this branch');
+  //       }
+  //     }
+  //   }
 
-    try {
-      // Get all menu items with their tax rates
-      const menuItemIds = data.items.map(item => item.menuItemId);
-      const menuItems = await prisma.menuItem.findMany({
-        where: { id: { in: menuItemIds } },
-        select: { id: true, taxRate: true, taxExempt: true }
-      });
+  //   try {
+  //     // Get all menu items with their tax rates
+  //     const menuItemIds = data.items.map(item => item.menuItemId);
+  //     const menuItems = await prisma.menuItem.findMany({
+  //       where: { id: { in: menuItemIds } },
+  //       select: { id: true, taxRate: true, taxExempt: true }
+  //     });
 
-      // Create a map of menu item IDs to their tax rates
-      const menuItemTaxInfo = new Map(
-        menuItems.map(item => [item.id, { 
-          taxRate: item.taxExempt ? 0 : item.taxRate,
-          taxExempt: item.taxExempt
-        }])
-      );
+  //     // Create a map of menu item IDs to their tax rates
+  //     const menuItemTaxInfo = new Map(
+  //       menuItems.map(item => [item.id, { 
+  //         taxRate: item.taxExempt ? 0 : item.taxRate,
+  //         taxExempt: item.taxExempt
+  //       }])
+  //     );
 
-      // Calculate order items with proper tax
-      const orderItems = data.items.map(item => {
-        const itemInfo = menuItemTaxInfo.get(item.menuItemId) || { taxRate: 0, taxExempt: false };
-        const itemSubtotal = item.price * item.quantity;
-        const itemTax = itemInfo.taxExempt ? 0 : (itemSubtotal * (itemInfo.taxRate || 0)) / 100;
+  //     // Calculate order items with proper tax
+  //     const orderItems = data.items.map(item => {
+  //       const itemInfo = menuItemTaxInfo.get(item.menuItemId) || { taxRate: 0, taxExempt: false };
+  //       const itemSubtotal = item.price * item.quantity;
+  //       const itemTax = itemInfo.taxExempt ? 0 : (itemSubtotal * (itemInfo.taxRate || 0)) / 100;
         
-        const payload= {
-          menuItemId: item.menuItemId,
-          name: item.name || `Item ${item.menuItemId}`,
-          price: item.price,
-          quantity: item.quantity,
-          taxRate: itemInfo.taxRate,
-          tax: itemTax,
-          total: itemSubtotal + itemTax,
-          notes: item.notes,
-          modifiers: item.modifiers
-        };
-        return payload;
-      });
+  //       const payload= {
+  //         menuItemId: item.menuItemId,
+  //         name: item.name || `Item ${item.menuItemId}`,
+  //         price: item.price,
+  //         quantity: item.quantity,
+  //         taxRate: itemInfo.taxRate,
+  //         tax: itemTax,
+  //         total: itemSubtotal + itemTax,
+  //         notes: item.notes,
+  //         modifiers: item.modifiers
+  //       };
+  //       return payload;
+  //     });
 
-      // Calculate order totals
-      const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
-      const total = subtotal + tax - (data.discount || 0);
+  //     // Calculate order totals
+  //     const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  //     const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
+  //     const total = subtotal + tax - (data.discount || 0);
 
-      // Generate a unique order number if not provided
-      const orderNumber = data.orderNumber || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  //     // Generate a unique order number if not provided
+  //     const orderNumber = data.orderNumber || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
       
-      // Verify all menu items exist
-      if (menuItems.length !== new Set(menuItemIds).size) {
-        const foundIds = new Set(menuItems.map(item => item.id));
-        const missingIds = menuItemIds.filter(id => !foundIds.has(id));
-        throw ApiError.badRequest(`The following menu items do not exist: ${missingIds.join(', ')}`);
-      }
+  //     // Verify all menu items exist
+  //     if (menuItems.length !== new Set(menuItemIds).size) {
+  //       const foundIds = new Set(menuItems.map(item => item.id));
+  //       const missingIds = menuItemIds.filter(id => !foundIds.has(id));
+  //       throw ApiError.badRequest(`The following menu items do not exist: ${missingIds.join(', ')}`);
+  //     }
       
-      const order = await prisma.order.create({
-        data: {
-          id: randomUUID(),
-          orderNumber,
-          orderType: data.orderType ?? OrderType.DINE_IN,
-          status: data.status || 'PENDING',
-          paymentStatus: data.paymentStatus || 'PENDING',
-          paymentMethod: data.paymentMethod,
-          subtotal,
-          tax,
-          total,
-          tableNumber: data.tableNumber,
-          customerName: data.customerName,
-          customerEmail: data.customerEmail,
-          customerPhone: data.customerPhone,
-          notes: data.notes,
-          branchName: data.branchName,
-          createdById: currentUser.userId,
-          items: {
-            create: orderItems.map(item => ({
-              id: randomUUID(),
-              menuItemId: item.menuItemId,
-              name: item.name,
-              price: item.price,
-              quantity: item.quantity,
-              taxRate: item.taxRate,
-              tax: item.tax,
-              total: item.total,
-              notes: item.notes,
-              modifiers: item.modifiers
-            }))
-          }
-        },
-        include: {
-          items: true,
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
-          }
-        }
-      });
-      // console.log(order,"order");
+  //     const order = await prisma.order.create({
+  //       data: {
+  //         id: randomUUID(),
+  //         orderNumber,
+  //         orderType: data.orderType ?? OrderType.DINE_IN,
+  //         status: data.status || 'PENDING',
+  //         paymentStatus: data.paymentStatus || 'PENDING',
+  //         paymentMethod: data.paymentMethod,
+  //         subtotal,
+  //         tax,
+  //         total,
+  //         tableNumber: data.tableNumber,
+  //         customerName: data.customerName,
+  //         customerEmail: data.customerEmail,
+  //         customerPhone: data.customerPhone,
+  //         notes: data.notes,
+  //         branchName: data.branchName,
+  //         createdById: currentUser.userId,
+  //         items: {
+  //           create: orderItems.map(item => ({
+  //             id: randomUUID(),
+  //             menuItemId: item.menuItemId,
+  //             name: item.name,
+  //             price: item.price,
+  //             quantity: item.quantity,
+  //             taxRate: item.taxRate,
+  //             tax: item.tax,
+  //             total: item.total,
+  //             notes: item.notes,
+  //             modifiers: item.modifiers
+  //           }))
+  //         }
+  //       },
+  //       include: {
+  //         items: true,
+  //         createdBy: {
+  //           select: {
+  //             id: true,
+  //             name: true,
+  //             email: true
+  //           }
+  //         }
+  //       }
+  //     });
+  //     // console.log(order,"order");
 
-      return order;
-    } catch (error) {
-      console.error('Error creating order:', error);
-      throw ApiError.internal('Failed to create order');
-    }
-  },
+  //     return order;
+  //   } catch (error) {
+  //     console.error('Error creating order:', error);
+  //     throw ApiError.internal('Failed to create order');
+  //   }
+  // },
 
   getOrders: async (query: GetOrdersQuery, currentUser: JwtPayload): Promise<OrderResponse> => {
     // Get user's branch and role with more detailed selection
@@ -483,8 +484,8 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
     }
 
     const { items, ...orderData } = data;
-    // console.log(orderData,"orderData")
-    
+    console.log(orderData,"orderData")
+    console.log(items,"items")
     // Verify user has access to the branch if branchName is provided
     if (orderData.branchName) {
       await checkBranchAccess(currentUser.userId, orderData.branchName);
@@ -548,6 +549,7 @@ console.log(total,"total")
           ...orderWithTotals,
           branchName: orderData.branchName, // ✅ Add branchName to standalone createOrder function
           createdById: currentUser.userId as string,
+          orderType:orderData.orderType,
           items: {
             create: itemsWithTotals.map(item => ({
               name: item.name,
@@ -787,8 +789,84 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
   }
 }
 
-export function getOrderStatsService(arg0: { startDate: Date | undefined; endDate: Date | undefined; }) {
-  throw new Error("Function not implemented.");
+export async function getOrderStatsService({ startDate, endDate, branchName }: { 
+  startDate?: Date; 
+  endDate?: Date;
+  branchName?: string;
+}) {
+  try {
+    const where: any = {};
+    
+    // Add date range filter if provided
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = startDate;
+      if (endDate) {
+        // Set to end of the day
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endOfDay;
+      }
+    }
+
+    // Add branch filter if provided
+    if (branchName) {
+      where.branchName = branchName;
+    }
+
+    // Get total orders
+    const totalOrders = await prisma.order.count({ where });
+    
+    // Get completed orders
+    const completedOrders = await prisma.order.count({
+      where: {
+        ...where,
+        status: 'COMPLETED'
+      }
+    });
+
+    // Get cancelled orders
+    const cancelledOrders = await prisma.order.count({
+      where: {
+        ...where,
+        status: 'CANCELLED'
+      }
+    });
+
+    // Get total revenue
+    const revenueResult = await prisma.order.aggregate({
+      where: {
+        ...where,
+        status: 'COMPLETED',
+        paymentStatus: 'PAID'
+      },
+      _sum: {
+        total: true
+      }
+    });
+
+    // Get average order value
+    const avgOrderValue = totalOrders > 0 
+      ? (revenueResult._sum.total || 0) / totalOrders 
+      : 0;
+
+    // Calculate cancellation rate
+    const cancellationRate = totalOrders > 0 
+      ? (cancelledOrders / totalOrders) * 100 
+      : 0;
+
+    return {
+      totalOrders,
+      completedOrders,
+      cancelledOrders,
+      totalRevenue: revenueResult._sum.total || 0,
+      avgOrderValue,
+      cancellationRate
+    };
+  } catch (error) {
+    console.error('Error in getOrderStatsService:', error);
+    throw new Error('Failed to get order statistics');
+  }
 }
 
 

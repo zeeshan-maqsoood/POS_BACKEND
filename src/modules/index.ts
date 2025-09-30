@@ -6,6 +6,7 @@ import orderRoutes from "./orders/order.routes";
 import { dashboardRouter } from "./dashboard/dashboard.routes";
 import receiptRoutes from "./receipt/receipt.routes";
 import branchRoutes from "./branch/branch.routes";
+import analyticsRoutes from "./analytics/analytics.routes"
 // import authRoutes from "./auth/auth.routes";
 
 const router = Router();
@@ -18,6 +19,7 @@ router.use("/orders", orderRoutes);
 router.use("/branches", branchRoutes);
 router.use("/dashboard", dashboardRouter);
 router.use("/receipts", receiptRoutes);
+router.use("/analytics", analyticsRoutes);
 // router.use("/auth", authRoutes);
 
 export default router;

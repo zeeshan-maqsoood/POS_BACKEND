@@ -39,7 +39,7 @@ const orderItemSchema = Joi.object({
 // Schema for creating a new order
 export const createOrderValidator = {
   body: Joi.object({
-    orderType: Joi.string().valid('DINE_IN', 'TAKEOUT', 'DELIVERY').default('DINE_IN'),
+    orderType: Joi.string().valid('DINE_IN', 'TAKEAWAY', 'DELIVERY').default('DINE_IN'),
     tableNumber: Joi.string().optional().allow(''),
     customerName: Joi.string().optional().allow(''),
     customerEmail: Joi.string().email({ tlds: { allow: false } }).optional().allow(''),
