@@ -257,6 +257,7 @@ model Modifier {
   id            String            @id @default(uuid())
   name          String
   description   String?
+  price         Float             @default(0)
   type          String            @default("SINGLE")
   isRequired    Boolean           @default(false)
   isActive      Boolean           @default(true)
@@ -285,4 +286,4 @@ model MenuItemModifier {
   menuItemId String
   modifier   Modifier  @relation(fields: [modifierId], references: [id])
   modifierId String
-}
+}   

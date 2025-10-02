@@ -68,7 +68,7 @@ app.use(express.json({ limit: '10kb' }));
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
-
+app.use(morgan('dev'));
 // Health check endpoint
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });

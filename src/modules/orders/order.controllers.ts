@@ -192,7 +192,7 @@ export const getOrderById = async (req: Request, res: Response) => {
   try {
     const currentUser = req.user as unknown as JwtPayload;
     const order = await orderService.getOrderByIdService(req.params.id, currentUser);
-
+console.log("id functions callls")
     if (!order) {
       return ApiResponse.send(res, ApiResponse.error("Order not found", 404));
     }
@@ -237,7 +237,62 @@ export const deleteOrder = async (req: Request, res: Response) => {
     await orderService.deleteOrderService(req.params.id, currentUser);
     ApiResponse.send(res, ApiResponse.success(null, "Order deleted successfully", 204));
   } catch (error: any) {
-    ApiResponse.send(res, ApiResponse.error(error.message, 400));
+    console.error('Error deleting order:', error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Failed to delete order';
+    ApiResponse.send(res, ApiResponse.error(message, statusCode));
+  }
+};
+
+export const getOrderByTable = async (req: Request, res: Response) => {
+  try {
+    const currentUser = req.user as unknown as JwtPayload;
+    console.log(currentUser, "currentUser");
+    console.log(req.query.branchName, "branchName query");
+    
+    if (!req.query.branchName) {
+      return ApiResponse.send(res, ApiResponse.success([], "No branch specified"));
+    }
+    
+    const orders = await orderService.getOrderByTableService(
+      currentUser, 
+      req.query.branchName as string
+    );
+    
+    // If no orders found, return empty array instead of error
+    if (!orders || orders.length === 0) {
+      return ApiResponse.send(res, ApiResponse.success([], "No orders found for this branch"));
+    }
+    
+    ApiResponse.send(res, ApiResponse.success(orders, "Orders retrieved successfully"));
+  } catch (error: any) {
+    console.error('Error getting orders by table:', error);
+    // If it's a not found error, return empty array instead of error
+    if (error.message?.includes('not found') || error.message?.includes('No orders')) {
+      return ApiResponse.send(res, ApiResponse.success([], 'No orders found for this branch'));
+    }
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Failed to get orders by table';
+    ApiResponse.send(res, ApiResponse.error(message, statusCode));
+  }
+};
+
+export const updateOrder = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const currentUser = req.user as JwtPayload;
+
+    const updatedOrder = await orderService.updateOrder(id, data, currentUser);
+    
+    const response = ApiResponse.success(updatedOrder, 'Order updated successfully');
+    return ApiResponse.send(res, response);
+  } catch (error: any) {
+    console.error('Error updating order:', error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Failed to update order';
+    const response = ApiResponse.error(message, statusCode);
+    return ApiResponse.send(res, response);
   }
 };
 
@@ -248,5 +303,7 @@ export default {
   getOrderStats,
   getOrderById,
   updateOrderStatus,
-  deleteOrder
+  updateOrder,
+  deleteOrder,
+  getOrderByTable
 };
