@@ -5,6 +5,7 @@ import { Order, OrderStatus, PaymentStatus, OrderType, PaymentMethod } from '@pr
 import { JwtPayload } from "../../types/auth.types";
 import { parseISO, isDate } from 'date-fns';
 import { getIo } from "../../../app";
+import PrintService from "../../services/print.service";
 interface OrderQueryParams {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
@@ -72,9 +73,9 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       throw new Error('Failed to create order: Invalid order data returned from service');
     }
     // Print receipt in the background (don't await to avoid delaying the response)
-    printOrderReceipt(order.id).catch((error: Error) => {
-      console.error('Error printing receipt:', error);
-    });
+    // printOrderReceipt(order.id).catch((error: Error) => {
+    //   console.error('Error printing receipt:', error);
+    // });
     
     ApiResponse.send(res, ApiResponse.success<OrderWithItems>(order, "Order created successfully", 201));
   } catch (error: any) {
@@ -211,6 +212,9 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     const { status, notes } = req.body;
     const { id } = req.params;
 
+    // Get current order before updating
+    const currentOrder = await orderService.getOrderByIdService(id,currentUser);
+    
     // Update order status with the validated data
     const order = await orderService.updateOrderStatusService(id, status, currentUser);
 
@@ -222,7 +226,33 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     // Get the updated order with all fields
     const updatedOrder = await orderService.getOrderByIdService(id, currentUser);
 
-    ApiResponse.send(res, ApiResponse.success(updatedOrder, "Order status updated successfully"));
+    // Notify about order status change
+    const io = getIo();
+    io.emit('order-status-updated', {
+      orderId: updatedOrder.id,
+      status: updatedOrder.status,
+      updatedBy: currentUser.id,
+      message: `Order status updated to ${status}`
+    });
+
+    // Print receipt if order is marked as COMPLETED
+    if (status === 'COMPLETED' && currentOrder.status !== 'COMPLETED') {
+      try {
+        await PrintService.printOrderReceipt({
+          ...updatedOrder,
+          isStatusReceipt: true,
+          previousStatus: currentOrder.status,
+          newStatus: status,
+          updatedBy: currentUser.id || 'System'
+        });
+        console.log('Order completion receipt printed successfully');
+      } catch (printError) {
+        console.error('Error printing order completion receipt:', printError);
+        // Don't fail the request if printing fails
+      }
+    }
+
+    ApiResponse.send(res, ApiResponse.success(updatedOrder, 'Order status updated successfully'));
   } catch (error: any) {
     console.error('Error updating order status:', error);
     const statusCode = error.statusCode || 500;

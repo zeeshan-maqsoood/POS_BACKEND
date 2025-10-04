@@ -307,7 +307,11 @@ export const menuItemService = {
       where,
       include: {
         category: true,
-        modifiers: true
+       modifiers:{
+        include:{
+          modifier:true
+        }
+       }
       },
     });
 
@@ -318,7 +322,14 @@ export const menuItemService = {
       branchName: item.branchName
     })));
 
-    return items;
+    const transformedItems = items.map(item => ({
+      ...item,
+      modifiers: item.modifiers.map(m => ({
+        ...m.modifier,
+        menuItemModifierId: m.id  // Keep the join table ID if needed
+      }))
+    }));
+    return transformedItems;
   },
 
   async get(id: string, user?: any) {
@@ -343,67 +354,58 @@ export const menuItemService = {
       where,
       include: {
         category: true,
-        modifiers: true
+        modifiers:{
+          include:{
+            modifier:true
+          }
+        }
       },
     });
   },
 
   async update(id: string, data: any, user?: any) {
-    // First verify the item exists and the user has access to it
-    const existingItem = await prisma.menuItem.findUnique({
-      where: { id },
-      select: { branchName: true }
-    });
-
-    if (!existingItem) {
-      throw new Error('Menu item not found');
-    }
-
-    // For managers, ensure they can only update items from their branch
-    if (user?.role === 'MANAGER' && user?.branch) {
-      // Normalize the user's branch name
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
-
-      if (existingItem.branchName !== normalizedUserBranch) {
-        throw new Error('You do not have permission to update this menu item');
-      }
-      // Prevent changing the branch
-      if (data.branchName && data.branchName !== normalizedUserBranch) {
-        throw new Error('You cannot change the branch of a menu item');
-      }
-    }
-    // Admins can update any item
-
     const { modifiers, ...itemData } = data;
-
     return prisma.menuItem.update({
-      where: { id },
-      data: {
-        ...itemData,
-        // if modifiers are passed, replace them
-        ...(modifiers && {
-          modifiers: {
-            deleteMany: {}, // remove existing
-            create: modifiers.map((m: any) => ({
-              name: m.name,
-              price: m.price,
-              isActive: m.isActive ?? true,
-            })),
-          },
-        }),
-      },
-      include: {
-        category: true,
-        modifiers: true
-      },
-    });
-  },
+    where: { id },
+    data: {
+      ...itemData,
+      ...(modifiers && {
+        modifiers: {
+          deleteMany: {}, // remove old links
+  
+          // connect existing modifiers
+          ...(modifiers.connect && {
+            create: modifiers.connect.map((m: any) => ({
+              modifier: {
+                connect: { id: m.id }
+              }
+            }))
+          }),
+  
+          // create new modifiers + link
+          ...(modifiers.create && {
+            create: modifiers.create.map((m: any) => ({
+              modifier: {
+                create: {
+                  name: m.name,
+                  description: m.description,
+                  price: m.price,
+                  type: m.type ?? "SINGLE",
+                  isRequired: m.isRequired ?? false,
+                  isActive: m.isActive ?? true,
+                }
+              }
+            }))
+          }),
+        },
+      }),
+    },
+    include: {
+      category: true,
+      modifiers: { include: { modifier: true } },
+    },
+  })    
+},
 
   async remove(id: string, user?: any) {
     // First verify the item exists and the user has access to it
@@ -436,6 +438,7 @@ export const menuItemService = {
     return prisma.menuItem.delete({ where: { id } });
   },
 };
+
 // --- Modifier ---
 export const modifierService = {
   async create(data: any) {

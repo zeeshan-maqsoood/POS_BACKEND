@@ -7,6 +7,7 @@ const paymentStatuses = Object.values(PaymentStatus);
 const paymentMethods = Object.values(PaymentMethod);
 
 // Base schema for order items
+// Base schema for order items
 const orderItemSchema = Joi.object({
   menuItemId: Joi.string().required().messages({
     'string.empty': 'Menu item ID is required',
@@ -27,15 +28,25 @@ const orderItemSchema = Joi.object({
     'number.min': 'Quantity must be at least 1',
     'any.required': 'Quantity is required'
   }),
+  tax: Joi.number().min(0).default(0).messages({
+    'number.base': 'Tax must be a number',
+    'number.min': 'Tax cannot be negative'
+  }),
   taxRate: Joi.number().min(0).max(100).default(0).messages({
     'number.base': 'Tax rate must be a number',
     'number.min': 'Tax rate cannot be negative',
     'number.max': 'Tax rate cannot exceed 100%'
   }),
+  modifiers: Joi.array().items(
+    Joi.object({
+      id: Joi.string().optional().allow(''),
+      name: Joi.string().optional().allow(''),
+      price: Joi.number().min(0).optional().allow(0)
+    })
+  ).optional(),
   total: Joi.number().min(0).optional(),
   notes: Joi.string().optional()
 });
-
 // Schema for creating a new order
 export const createOrderValidator = {
   body: Joi.object({

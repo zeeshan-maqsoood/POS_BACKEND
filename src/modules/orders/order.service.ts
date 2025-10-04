@@ -3,9 +3,9 @@ import { OrderStatus, PaymentMethod, PaymentStatus, OrderType, UserRole, Prisma 
 import { JwtPayload } from "../../types/auth.types";
 import { ApiError } from "../../utils/apiResponse";
 import PrintService from "../../services/print.service";
-import { 
-  CreateOrderInput, 
-  UpdateOrderInput, 
+import {
+  CreateOrderInput,
+  UpdateOrderInput,
   GetOrdersQuery,
   OrderItemInput,
   OrderItem,
@@ -37,15 +37,15 @@ const checkBranchAccess = async (userId: string, branchName: string) => {
   });
 
   if (!user) throw ApiError.notFound('User not found');
-  
+
   // Admin can access all branches
   if (user.role === 'ADMIN') return true;
-  
+
   // Manager and Kitchen Staff can only access their own branch
   if ((user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') && user.branch === branchName) {
     return true;
   }
-  
+
   return false;
 };
 
@@ -54,7 +54,7 @@ export const orderService = {
   //   if (!data.tableNumber && !data.customerName) {
   //     throw ApiError.badRequest("Order must have either a table number or customer name");
   //   }
-    
+
   //   console.log(currentUser,"currentUser")
   //   // Get user's details
   //   const user = await prisma.user.findUnique({
@@ -63,17 +63,17 @@ export const orderService = {
   //   });
 
   //   if (!user) throw ApiError.notFound('User not found');
-    
+
   //   // Kitchen staff cannot create orders
   //   if (user.role === 'KITCHEN_STAFF') {
   //     throw ApiError.forbidden('Kitchen staff cannot create orders');
   //   }
-    
+
   //   // If user is a manager and no branch is specified, use their branch
   //   if (user.role === 'MANAGER' && !data.branchName && user.branch) {
   //     data.branchName = user.branch;
   //   }
-    
+
   //   // If branch is provided or set from manager, verify the user has access to it
   //   if (data.branchName) {
   //     // For managers, we already know they have access to their own branch
@@ -106,7 +106,7 @@ export const orderService = {
   //       const itemInfo = menuItemTaxInfo.get(item.menuItemId) || { taxRate: 0, taxExempt: false };
   //       const itemSubtotal = item.price * item.quantity;
   //       const itemTax = itemInfo.taxExempt ? 0 : (itemSubtotal * (itemInfo.taxRate || 0)) / 100;
-        
+
   //       const payload= {
   //         menuItemId: item.menuItemId,
   //         name: item.name || `Item ${item.menuItemId}`,
@@ -128,14 +128,14 @@ export const orderService = {
 
   //     // Generate a unique order number if not provided
   //     const orderNumber = data.orderNumber || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-      
+
   //     // Verify all menu items exist
   //     if (menuItems.length !== new Set(menuItemIds).size) {
   //       const foundIds = new Set(menuItems.map(item => item.id));
   //       const missingIds = menuItemIds.filter(id => !foundIds.has(id));
   //       throw ApiError.badRequest(`The following menu items do not exist: ${missingIds.join(', ')}`);
   //     }
-      
+
   //     const order = await prisma.order.create({
   //       data: {
   //         id: randomUUID(),
@@ -193,9 +193,9 @@ export const orderService = {
     // Get user's branch and role with more detailed selection
     const user = await prisma.user.findUnique({
       where: { id: currentUser.userId },
-      select: { 
-        branch: true, 
-        role: true, 
+      select: {
+        branch: true,
+        role: true,
         id: true,
         name: true
       }
@@ -207,7 +207,7 @@ export const orderService = {
 
     // Build where clause
     const where: any = {};
-    
+
     // For kitchen staff, only show orders from their branch
     if (user.role === 'KITCHEN_STAFF') {
       if (!user.branch) {
@@ -216,7 +216,7 @@ export const orderService = {
       }
       where.branchName = user.branch;
       console.log(`[getOrders] Filtering orders for kitchen staff - Branch: ${user.branch}`);
-    } 
+    }
     // For managers, show all orders from their branch (not just their own)
     else if (user.role === 'MANAGER') {
       // Only filter by their branch, allow seeing all orders from their branch
@@ -234,7 +234,7 @@ export const orderService = {
       where.branchName = query.branchName;
       console.log(`[getOrders] Admin filtering by branch: ${query.branchName}`);
     }
-console.log(where,"where")
+    console.log(where, "where")
     // Apply other filters
     if (query.status) where.status = query.status;
     if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
@@ -265,7 +265,7 @@ console.log(where,"where")
     // Get orders with pagination and sorting
     const orders = await prisma.order.findMany({
       where,
-      include: { 
+      include: {
         items: true,
         createdBy: {
           select: {
@@ -275,8 +275,8 @@ console.log(where,"where")
           }
         }
       },
-      orderBy: { 
-        [query.sortBy || 'createdAt']: query.sortOrder || 'desc' 
+      orderBy: {
+        [query.sortBy || 'createdAt']: query.sortOrder || 'desc'
       },
       skip,
       take: pageSize,
@@ -298,7 +298,7 @@ console.log(where,"where")
     // First get the order without access check to see if it exists
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { 
+      include: {
         items: true,
         createdBy: {
           select: {
@@ -319,11 +319,11 @@ console.log(where,"where")
       where: { id: currentUser.userId },
       select: { branch: true, role: true, id: true }
     });
-// console.log(order,"order")
+    // console.log(order,"order")
     if (!user) throw ApiError.notFound('User not found');
 
     // If user is a manager
-    if (user.role === 'MANAGER'||user.role === 'KITCHEN_STAFF') {
+    if (user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') {
       // Allow managers to view all orders from their branch, not just their own
       if (user.role === 'KITCHEN_STAFF') {
         // Kitchen staff can only see orders from their branch
@@ -332,15 +332,15 @@ console.log(where,"where")
         }
       }
       // For managers, allow viewing any order from their branch
-      console.log(order.branchName,"order.branchName")
-      console.log(user.branch,"user.branch")
-    } 
+      console.log(order.branchName, "order.branchName")
+      console.log(user.branch, "user.branch")
+    }
     // If user is admin and order has a branch, check branch access
     else if (order.branchName) {
-      console.log(order.branchName,"order.branchName")
-      console.log(currentUser.userId,"currentUser.userId")
+      console.log(order.branchName, "order.branchName")
+      console.log(currentUser.userId, "currentUser.userId")
       const hasAccess = await checkBranchAccess(currentUser.userId, order.branchName);
-      console.log(hasAccess,"hasAccess")
+      console.log(hasAccess, "hasAccess")
       if (!hasAccess) {
         throw ApiError.forbidden('You do not have permission to view this order');
       }
@@ -369,7 +369,7 @@ console.log(where,"where")
     if (!user) throw ApiError.notFound('User not found');
 
     // If user is a manager
-    if (user.role === 'MANAGER'||user.role === 'KITCHEN_STAFF') {
+    if (user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') {
       // Allow managers to update all orders from their branch, not just their own
       if (user.role === 'KITCHEN_STAFF') {
         // Kitchen staff can only update orders from their branch
@@ -378,7 +378,7 @@ console.log(where,"where")
         }
       }
       // For managers, allow updating any order from their branch
-    } 
+    }
     // If user is admin and order has a branch, check branch access
     else if (existingOrder.branchName) {
       const hasAccess = await checkBranchAccess(currentUser.userId, existingOrder.branchName);
@@ -386,7 +386,7 @@ console.log(where,"where")
         throw ApiError.forbidden('You do not have permission to update this order');
       }
     }
-    console.log(data,"dataOrder")
+    console.log(data, "dataOrder")
 
     // Prepare update data
     const updateData: Prisma.OrderUpdateInput = {
@@ -423,7 +423,7 @@ console.log(where,"where")
         }))
       };
     }
-    console.log(updateData,"updateData")
+    console.log(updateData, "updateData")
 
     // Proceed with update
     const order = await prisma.order.update({
@@ -459,7 +459,7 @@ console.log(where,"where")
       if (user.branch && order.branchName !== user.branch) {
         throw ApiError.forbidden('You do not have permission to delete this order');
       }
-    } 
+    }
     // If user is admin and order has a branch, check branch access
     else if (order.branchName) {
       const hasAccess = await checkBranchAccess(currentUser.userId, order.branchName);
@@ -486,8 +486,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
     }
 
     const { items, ...orderData } = data;
-    console.log(orderData,"orderData")
-    console.log(items,"items")
+
     // Verify user has access to the branch if branchName is provided
     if (orderData.branchName) {
       await checkBranchAccess(currentUser.userId, orderData.branchName);
@@ -518,8 +517,8 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
         const taxRate = parseFloat((item.taxRate || 0).toString());
         const subtotal = price * quantity;
         const tax = orderData.tax;
-        const total = subtotal + tax;
-// console.log(item,"item")
+        const total = subtotal;
+        // console.log(item,"item")
         return {
           ...item,
           quantity,
@@ -534,10 +533,8 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       // Calculate order totals
       const subtotal = orderData.subtotal;
       const taxTotal = orderData.tax;
-      const total = subtotal + taxTotal - (orderData.discount || 0);
-console.log(subtotal,"subtotal")
-console.log(taxTotal,"taxTotal")
-console.log(total,"total")
+      const total = subtotal;
+
       // Update order data with calculated totals
       const orderWithTotals = {
         ...orderData,
@@ -551,7 +548,7 @@ console.log(total,"total")
           ...orderWithTotals,
           branchName: orderData.branchName, // ✅ Add branchName to standalone createOrder function
           createdById: currentUser.userId as string,
-          orderType:orderData.orderType,
+          orderType: orderData.orderType,
           items: {
             create: itemsWithTotals.map(item => ({
               name: item.name,
@@ -561,6 +558,7 @@ console.log(total,"total")
               tax: item.tax,
               total: item.total,
               notes: item.notes || null,
+              modifiers: item.modifiers || null,  // Add this line to include modifiers
               ...(item.menuItemId ? { menuItemId: item.menuItemId } : {})
             }))
           }
@@ -581,9 +579,15 @@ console.log(total,"total")
     });
 
     // Print the receipt in the background (don't await to avoid blocking the response)
-    PrintService.printOrderReceipt(order).catch(error => {
-      console.error('Failed to print receipt:', error);
-    });
+    // Print both receipts in the background
+    PrintService.printOrderReceipt(order)
+      .then(({ manager, kitchen }) => {
+        if (!manager) console.warn('Failed to print manager receipt');
+        if (!kitchen) console.warn('Failed to print kitchen receipt');
+      })
+      .catch(error => {
+        console.error('Error printing receipts:', error);
+      });
 
     return order as unknown as OrderWithItems;
   } catch (error) {
@@ -611,21 +615,21 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
   // Get user's branch and role with more details
   const user = await prisma.user.findUnique({
     where: { id: currentUser.userId },
-    select: { 
-      branch: true, 
-      role: true, 
+    select: {
+      branch: true,
+      role: true,
       id: true,
-      name: true 
+      name: true
     }
   });
 
   if (!user) throw new Error('User not found');
-  
+
   console.log(`[getOrdersService] User ${user.name} (${user.role}) - Branch: ${user.branch}`);
 
   // Build where clause
   const where: any = {};
-  
+
   // For kitchen staff, only show orders from their branch
   if (user.role === 'KITCHEN_STAFF') {
     if (!user.branch) {
@@ -634,7 +638,7 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
     }
     where.branchName = user.branch;
     console.log(`[getOrdersService] Filtering orders for kitchen staff - Branch: ${user.branch}`);
-  } 
+  }
   // For managers, show all orders from their branch (not just their own)
   else if (user.role === 'MANAGER') {
     // Only filter by their branch, allow seeing all orders from their branch
@@ -683,7 +687,7 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
   // Get orders with pagination and sorting
   const orders = await prisma.order.findMany({
     where,
-    include: { 
+    include: {
       items: true,
       createdBy: {
         select: {
@@ -693,8 +697,8 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
         }
       }
     },
-    orderBy: { 
-      [params.sortBy || 'createdAt']: params.sortOrder || 'desc' 
+    orderBy: {
+      [params.sortBy || 'createdAt']: params.sortOrder || 'desc'
     },
     skip,
     take: pageSize,
@@ -760,7 +764,7 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
         paymentStatus,
         paymentMethod
       },
-      include: { 
+      include: {
         items: true,
         createdBy: {
           select: {
@@ -791,14 +795,14 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
   }
 }
 
-export async function getOrderStatsService({ startDate, endDate, branchName }: { 
-  startDate?: Date; 
+export async function getOrderStatsService({ startDate, endDate, branchName }: {
+  startDate?: Date;
   endDate?: Date;
   branchName?: string;
 }) {
   try {
     const where: any = {};
-    
+
     // Add date range filter if provided
     if (startDate || endDate) {
       where.createdAt = {};
@@ -818,7 +822,7 @@ export async function getOrderStatsService({ startDate, endDate, branchName }: {
 
     // Get all orders count
     const totalOrders = await prisma.order.count({ where });
-    
+
     // Get orders by status
     const [completedOrders, cancelledOrders, pendingOrders] = await Promise.all([
       prisma.order.count({
@@ -855,13 +859,13 @@ export async function getOrderStatsService({ startDate, endDate, branchName }: {
 
     // Get average order value (only for completed orders)
     const completedOrdersCount = completedOrders || 1; // Avoid division by zero
-    const avgOrderValue = completedOrders > 0 
-      ? (revenueResult._sum.total || 0) / completedOrdersCount 
+    const avgOrderValue = completedOrders > 0
+      ? (revenueResult._sum.total || 0) / completedOrdersCount
       : 0;
 
     // Calculate cancellation rate
-    const cancellationRate = totalOrders > 0 
-      ? (cancelledOrders / totalOrders) * 100 
+    const cancellationRate = totalOrders > 0
+      ? (cancelledOrders / totalOrders) * 100
       : 0;
 
     // Get orders by status for the pie chart
@@ -912,9 +916,9 @@ export async function getOrderByIdService(id: string, currentUser: JwtPayload) {
       //   },
       // },
     },
- 
+
   });
-console.log(order,"orderbyId")
+  console.log(order, "orderbyId")
   if (!order) {
     throw new Error('Order not found');
   }
@@ -1112,9 +1116,18 @@ export async function updateOrder(
   currentUser?: JwtPayload
 ) {
   try {
-    // Start a transaction
     return await prisma.$transaction(async (tx) => {
-      // 1. Update the order
+      // 1. Get existing order with items
+      const existingOrder = await tx.order.findUnique({
+        where: { id },
+        include: { items: true }
+      });
+
+      if (!existingOrder) {
+        throw new Error('Order not found');
+      }
+
+      // 2. Update the order
       const updatedOrder = await tx.order.update({
         where: { id },
         data: {
@@ -1134,14 +1147,65 @@ export async function updateOrder(
         include: { items: true }
       });
 
-      // 2. If items are provided, update them
+      // 3. Process items if provided
+      let newItems: string | any[] = [];
+      let itemsToPrint: string | any[] = [];
       if (data.items && Array.isArray(data.items)) {
-        // Delete existing items
+        // Get existing item IDs
+        // Get existing items with their details
+        const existingItems = existingOrder.items.map(item => ({
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          // Include other fields that might be modified
+          price: item.price,
+          tax: item.tax,
+          modifiers: item.modifiers
+        }));
+        itemsToPrint = data.items.filter(newItem => {
+          const existingItem = existingItems.find(item =>
+            item.menuItemId === newItem.menuItemId
+          );
+
+          // If item doesn't exist in existing items, it's new
+          if (!existingItem) return true;
+          if (existingItem.quantity !== newItem.quantity) {
+            // Calculate the difference
+            const quantityDifference = newItem.quantity - existingItem.quantity;
+            if (quantityDifference > 0) {
+              // Update the quantity to just the difference
+              newItem.quantity = quantityDifference;
+              return true;
+            }
+            return false;
+          }
+          return false;
+        });
+        // If any of these fields have changed, consider it modified
+
+        console.log('Items to print receipt for:', itemsToPrint);
+
+        newItems = data.items.filter(newItem => {
+          const existingItem = existingItems.find(item =>
+            item.menuItemId === newItem.menuItemId
+          );
+
+          // If item doesn't exist in existing items, it's new
+          if (!existingItem) return true;
+
+          // If any of these fields have changed, consider it modified
+          return existingItem.quantity !== newItem.quantity ||
+            existingItem.price !== newItem.price ||
+            JSON.stringify(existingItem.modifiers) !== JSON.stringify(newItem.modifiers);
+        });
+        console.log(existingItems, "existingItems")
+        console.log("all new Items", data.items)
+
+        // Delete all existing items
         await tx.orderItem.deleteMany({
           where: { orderId: id }
         });
 
-        // Create new items
+        // Create all items (existing + new)
         if (data.items.length > 0) {
           await tx.orderItem.createMany({
             data: data.items.map(item => {
@@ -1165,19 +1229,36 @@ export async function updateOrder(
             })
           });
         }
-
-        // Return the updated order with items
-        return tx.order.findUnique({
-          where: { id },
-          include: { items: true }
-        });
       }
 
-      return updatedOrder;
+      // 4. Get the complete updated order
+      const completeOrder = await tx.order.findUnique({
+        where: { id },
+        include: { items: true }
+      });
+      console.log(completeOrder, "completeOrder")
+      console.log(newItems, "newItemsss")
+      // 5. If there are new items, print receipts for them
+      if (itemsToPrint.length > 0) {
+        console.log("newItems", newItems);
+        const orderWithNewItems = {
+          ...completeOrder,
+          items: newItems,
+          isPartialUpdate: true
+        };
+
+        // Print in the background
+        PrintService.printOrderReceipt(orderWithNewItems)
+          .catch(error => {
+            console.error('Error printing receipt for updated order:', error);
+          });
+      }
+
+      return completeOrder;
     });
   } catch (error) {
     console.error('Error updating order:', error);
-    throw new Error('Failed to update order');
+    throw error;
   }
 }
 export async function deleteOrderService(id: string, currentUser?: JwtPayload) {
@@ -1222,17 +1303,17 @@ export async function deleteOrderService(id: string, currentUser?: JwtPayload) {
     throw new Error('Failed to delete order');
   }
 
-  
+
 }
 
 export async function getOrderByTableService(currentUser: JwtPayload, branchName: string) {
   try {
     console.log(currentUser, "currentUser");
     console.log(branchName, "branchName");
-    
+
     const orders = await prisma.order.findMany({
-      where: { 
-        branchName: branchName, 
+      where: {
+        branchName: branchName,
         status: 'PENDING',
         paymentStatus: 'PENDING',
         tableNumber: { not: null }
@@ -1245,7 +1326,7 @@ export async function getOrderByTableService(currentUser: JwtPayload, branchName
       },
       distinct: ['tableNumber']
     });
-    
+
     return orders;
   } catch (error) {
     console.error('Error fetching orders by table:', error);
