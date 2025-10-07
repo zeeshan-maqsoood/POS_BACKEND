@@ -7,6 +7,7 @@ import { dashboardRouter } from "./dashboard/dashboard.routes";
 import receiptRoutes from "./receipt/receipt.routes";
 import branchRoutes from "./branch/branch.routes";
 import analyticsRoutes from "./analytics/analytics.routes"
+import reportingRoutes from "./reporting/report.routes"
 // import authRoutes from "./auth/auth.routes";
 
 const router = Router();
@@ -20,6 +21,7 @@ router.use("/branches", branchRoutes);
 router.use("/dashboard", dashboardRouter);
 router.use("/receipts", receiptRoutes);
 router.use("/analytics", analyticsRoutes);
+router.use("/reports", reportingRoutes);
 // router.use("/auth", authRoutes);
 
 export default router;
