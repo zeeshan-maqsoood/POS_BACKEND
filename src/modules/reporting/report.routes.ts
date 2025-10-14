@@ -1,49 +1,44 @@
-import { Router } from 'express';
-import reportController from './report.controller';
-import { authenticate } from '../../middleware/authenticate';
-import { authorize } from '../../middleware/authorize';
-import { Permission } from '@prisma/client';
+import { Router } from "express";
+import { authenticateJWT, checkPermission } from "../../middleware/auth.middleware";
+import { reportsController } from "./report.controller";
 
 const router = Router();
+router.use(authenticateJWT);
 
-// Sales Reports
-router.get(
-  '/sales',
-  authenticate,
-  authorize([Permission.ORDER_READ]),
-  reportController.getSalesReport
-);
+// Sales & Order Reports
+router.get("/sales/overview", checkPermission(['ORDER_READ']), reportsController.getSalesOverview);
+router.get("/sales/orders", checkPermission(['ORDER_READ']), reportsController.getOrderReports);
+router.get("/sales/payments", checkPermission(['ORDER_READ']), reportsController.getPaymentReports);
 
-// Order Analysis
-router.get(
-  '/orders/analysis',
-  authenticate,
-  authorize([Permission.ORDER_READ]),
-  reportController.getOrderAnalysis
-);
+// Inventory Reports
+router.get("/inventory/status", checkPermission(['PRODUCT_READ']), reportsController.getInventoryStatus);
+router.get("/inventory/transactions", checkPermission(['PRODUCT_READ']), reportsController.getInventoryTransactions);
+router.get("/inventory/alerts", checkPermission(['PRODUCT_READ']), reportsController.getLowStockAlerts);
 
-// Menu Performance
-router.get(
-  '/menu/performance',
-  authenticate,
-  authorize([Permission.MENU_READ]),
-  reportController.getMenuPerformance
-);
+// Menu Reports
+router.get("/menu/performance", checkPermission(['MENU_READ']), reportsController.getMenuPerformance);
+router.get("/menu/categories", checkPermission(['MENU_READ']), reportsController.getCategoryPerformance);
 
-// Staff Performance
-router.get(
-  '/staff/performance',
-  authenticate,
-  authorize([Permission.USER_READ]),
-  reportController.getStaffPerformance
-);
+// Branch Reports
+router.get("/branch/performance", checkPermission(['ORDER_READ']), reportsController.getBranchPerformance);
+router.get("/branch/comparison", checkPermission(['ORDER_READ']), reportsController.getBranchComparison);
 
-// Financial Summary
-router.get(
-  '/financial/summary',
-  authenticate,
-  authorize([Permission.ORDER_READ]),
-  reportController.getFinancialSummary
-);
+// Staff Reports
+router.get("/staff/performance", checkPermission(['USER_READ']), reportsController.getStaffPerformance);
+router.get("/staff/activity", checkPermission(['USER_READ']), reportsController.getStaffActivity);
 
+// Financial Reports
+router.get("/financial/revenue", checkPermission(['ORDER_READ']), reportsController.getRevenueReports);
+router.get("/financial/taxes", checkPermission(['ORDER_READ']), reportsController.getTaxReports);
+
+// Dashboard Overview
+router.get("/dashboard/overview", checkPermission(['ORDER_READ']), reportsController.getDashboardOverview);
+
+// Time Analytics
+router.get("/time-analytics", checkPermission(['ORDER_READ']), reportsController.getTimeAnalytics);
+router.get("/time-analytics/sales-by-hour", checkPermission(['ORDER_READ']), reportsController.getSalesByHour);
+router.get("/time-analytics/peak-hours", checkPermission(['ORDER_READ']), reportsController.getPeakHoursAnalysis);
+router.get("/time-analytics/customer-behavior", checkPermission(['ORDER_READ']), reportsController.getCustomerBehaviorAnalytics);
+router.get("/time-analytics/product-performance", checkPermission(['MENU_READ']), reportsController.getProductPerformanceByTime);
+router.get("/time-analytics/staff-performance", checkPermission(['USER_READ']), reportsController.getStaffPerformanceByTime);
 export default router;

@@ -36,6 +36,12 @@ export const PERMISSIONS = {
   MENU_READ: 'MENU_READ' as const,
   MENU_UPDATE: 'MENU_UPDATE' as const,
   MENU_DELETE: 'MENU_DELETE' as const,
+
+  // Inventory permissions (using PRODUCT_* permissions for inventory)
+  INVENTORY_CREATE: 'PRODUCT_CREATE' as const,
+  INVENTORY_READ: 'PRODUCT_READ' as const,
+  INVENTORY_UPDATE: 'PRODUCT_UPDATE' as const,
+  INVENTORY_DELETE: 'PRODUCT_DELETE' as const,
 } as const;
 
 type PermissionKey = keyof typeof PERMISSIONS;

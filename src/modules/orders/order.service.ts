@@ -12,7 +12,7 @@ import {
   OrderResponse
 } from "../../types/order.types";
 import { randomUUID } from 'crypto';
-
+import { inventoryService } from "../../services/inventory-deduction.service";
 // Import prisma after the types to avoid circular dependencies
 import prisma from "../../loaders/prisma";
 
@@ -492,14 +492,26 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       await checkBranchAccess(currentUser.userId, orderData.branchName);
     }
 
+    // Check inventory availability before creating order
+    const inventoryCheck = await inventoryService.checkInventoryAvailability({
+      ...orderData,
+      items
+    });
+
+    if (!inventoryCheck.available) {
+      throw new Error(
+        `Insufficient inventory for the following items:\n` +
+        inventoryCheck.issues.map(issue => 
+          `- ${issue.itemName}: ${issue.ingredientName} (Required: ${issue.required}, Available: ${issue.available})`
+        ).join('\n')
+      );
+    }
+
     // Generate order number if not provided
     if (!orderData.orderNumber) {
-      // Generate a unique order number with timestamp and random string
       const timestamp = Date.now().toString().slice(-6);
       const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
       orderData.orderNumber = `ORD-${timestamp}-${randomStr}`;
-    } else if (typeof orderData.orderNumber !== 'string' || orderData.orderNumber.trim() === '') {
-      throw new Error('Invalid order number format');
     }
 
     // Set default status if not provided
@@ -509,7 +521,6 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
     // Create the order with items in a transaction
     const order = await prisma.$transaction(async (tx) => {
-      // Create the order
       // Calculate item totals and taxes
       const itemsWithTotals = items.map(item => {
         const quantity = item.quantity || 1;
@@ -518,7 +529,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
         const subtotal = price * quantity;
         const tax = orderData.tax;
         const total = subtotal;
-        // console.log(item,"item")
+
         return {
           ...item,
           quantity,
@@ -546,11 +557,12 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       const createdOrder = await tx.order.create({
         data: {
           ...orderWithTotals,
-          branchName: orderData.branchName, // ✅ Add branchName to standalone createOrder function
+          branchName: orderData.branchName,
           createdById: currentUser.userId as string,
           orderType: orderData.orderType,
           items: {
             create: itemsWithTotals.map(item => ({
+              id: randomUUID(),
               name: item.name,
               quantity: item.quantity,
               price: item.price,
@@ -558,7 +570,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
               tax: item.tax,
               total: item.total,
               notes: item.notes || null,
-              modifiers: item.modifiers || null,  // Add this line to include modifiers
+              modifiers: item.modifiers || null,
               ...(item.menuItemId ? { menuItemId: item.menuItemId } : {})
             }))
           }
@@ -578,8 +590,37 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       return createdOrder;
     });
 
-    // Print the receipt in the background (don't await to avoid blocking the response)
-    // Print both receipts in the background
+    // Deduct inventory after order is successfully created
+    try {
+      await inventoryService.deductInventoryForOrder(order);
+      
+      // Update order status to indicate inventory was deducted
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { 
+          status: OrderStatus.PENDING,
+          notes: order.notes ? `${order.notes}\n[Inventory deducted]` : '[Inventory deducted]'
+        }
+      });
+      
+    } catch (inventoryError:any) {
+      console.error('Inventory deduction failed:', inventoryError);
+      
+      // Mark order as needing attention
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { 
+          notes: order.notes ? 
+            `${order.notes}\n[INVENTORY ISSUE: ${inventoryError.message}]` : 
+            `[INVENTORY ISSUE: ${inventoryError.message}]`
+        }
+      });
+      
+      // Don't fail the order creation, but log the issue
+      console.warn(`Order ${order.orderNumber} created but inventory deduction failed:`, inventoryError.message);
+    }
+
+    // Print receipts in background
     PrintService.printOrderReceipt(order)
       .then(({ manager, kitchen }) => {
         if (!manager) console.warn('Failed to print manager receipt');
@@ -589,7 +630,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
         console.error('Error printing receipts:', error);
       });
 
-    return order as unknown as OrderWithItems;
+    return order;
   } catch (error) {
     console.error('Error creating order:', error);
     throw new Error(error instanceof Error ? error.message : 'Failed to create order');
@@ -951,9 +992,10 @@ export async function getOrderByIdService(id: string, currentUser: JwtPayload) {
 
 
 export async function updateOrderStatusService(id: string, status: OrderStatus, currentUser: JwtPayload) {
-  // First get the existing order to check access
-  const existingOrder = await prisma.order.findUnique({
-    where: { id }
+   // First get the existing order to check access
+   const existingOrder = await prisma.order.findUnique({
+    where: { id },
+    include: { items: true }
   });
 
   if (!existingOrder) {
@@ -968,19 +1010,14 @@ export async function updateOrderStatusService(id: string, status: OrderStatus, 
 
   if (!user) throw new Error('User not found');
 
-  // If user is a manager or kitchen staff
+  // Access check logic (keep your existing logic)
   if (user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') {
-    // Allow managers to update status of any order from their branch
     if (user.role === 'KITCHEN_STAFF') {
-      // Kitchen staff can only update orders from their branch
       if (user.branch && existingOrder.branchName !== user.branch) {
         throw new Error('You do not have permission to update this order');
       }
     }
-    // For managers, allow updating any order from their branch
-  }
-  // If user is admin and order has a branch, check branch access
-  else if (existingOrder.branchName) {
+  } else if (existingOrder.branchName) {
     const hasAccess = await checkBranchAccess(currentUser.userId, existingOrder.branchName);
     if (!hasAccess) {
       throw new Error('You do not have permission to update this order');
@@ -988,12 +1025,32 @@ export async function updateOrderStatusService(id: string, status: OrderStatus, 
   }
 
   try {
-    // Update only the status field
+    // Update the status field
     const updatedOrder = await prisma.order.update({
       where: { id },
       data: { status },
       include: { items: true }
     });
+
+    // Handle inventory for status changes
+    if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') {
+      // Restore inventory when order is cancelled
+      try {
+        await inventoryService.restoreInventoryForOrder(updatedOrder);
+        
+        // Update order notes
+        await prisma.order.update({
+          where: { id },
+          data: { 
+            notes: updatedOrder.notes ? 
+              `${updatedOrder.notes}\n[Inventory restored due to cancellation]` : 
+              '[Inventory restored due to cancellation]'
+          }
+        });
+      } catch (inventoryError) {
+        console.error('Inventory restoration failed during cancellation:', inventoryError);
+      }
+    }
 
     return updatedOrder;
   } catch (error) {
@@ -1326,6 +1383,7 @@ export async function getOrderByTableService(currentUser: JwtPayload, branchName
       },
       distinct: ['tableNumber']
     });
+    console.log(orders, "orders");
 
     return orders;
   } catch (error) {

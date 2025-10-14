@@ -204,11 +204,10 @@ console.log(user,"menuUser")
 // --- MenuItem ---
 export const menuItemService = {
   async create(data: any, user?: any) {
-    const { modifiers, ...itemData } = data;
-
+    const { modifiers, ingredients, ...itemData } = data;
+console.log(data,"data")
     // For managers, set their branch if not provided
     if (user?.role === 'MANAGER' && user?.branch && !itemData.branchName) {
-      // Normalize the branch name before storing
       const normalizedUserBranch = user.branch.startsWith('branch')
         ? user.branch.replace('branch1', 'Main Branch')
           .replace('branch2', 'Downtown Branch')
@@ -218,24 +217,28 @@ export const menuItemService = {
         : user.branch;
       itemData.branchName = normalizedUserBranch;
     }
-    // For admins, if no branch is specified, throw an error (they must choose)
     else if (user?.role === 'ADMIN' && !itemData.branchName) {
       throw new Error('Branch is required when creating menu items as admin');
     }
 
-    // Prepare the create data
     const createData: any = { ...itemData };
 
-    // Handle modifiers if they exist
+    // Handle modifiers
     if (modifiers && modifiers.connect) {
-      // For many-to-many relationship using connect
       createData.modifiers = {
         create: modifiers.connect.map(({ id }: { id: string }) => ({
-          modifier: {
-            connect: { id }
-          }
-          // No additional fields needed as per the Prisma schema
-          // The MenuItemModifier is a pure join table
+          modifier: { connect: { id } }
+        }))
+      };
+    }
+
+    // Handle ingredients
+    if (ingredients && ingredients.create) {
+      createData.menuItemIngredients = {
+        create: ingredients.create.map((ing: any) => ({
+          inventoryItem: { connect: { id: ing.inventoryItemId } },
+          quantity: ing.quantity,
+          unit: ing.unit
         }))
       };
     }
@@ -244,11 +247,8 @@ export const menuItemService = {
       data: createData,
       include: {
         category: true,
-        modifiers: {
-          include: {
-            modifier: true
-          }
-        }
+        modifiers: { include: { modifier: true } },
+        menuItemIngredients: { include: { inventoryItem: true } }
       },
     });
   },
@@ -311,7 +311,8 @@ export const menuItemService = {
         include:{
           modifier:true
         }
-       }
+       },
+       menuItemIngredients:true
       },
     });
 
@@ -358,53 +359,96 @@ export const menuItemService = {
           include:{
             modifier:true
           }
-        }
+        },
+        menuItemIngredients:true
       },
     });
   },
 
-  async update(id: string, data: any, user?: any) {
-    const { modifiers, ...itemData } = data;
-    return prisma.menuItem.update({
+//   async update(id: string, data: any, user?: any) {
+//     const { modifiers, ...itemData } = data;
+//     return prisma.menuItem.update({
+//     where: { id },
+//     data: {
+//       ...itemData,
+//       ...(modifiers && {
+//         modifiers: {
+//           deleteMany: {}, // remove old links
+  
+//           // connect existing modifiers
+//           ...(modifiers.connect && {
+//             create: modifiers.connect.map((m: any) => ({
+//               modifier: {
+//                 connect: { id: m.id }
+//               }
+//             }))
+//           }),
+  
+//           // create new modifiers + link
+//           ...(modifiers.create && {
+//             create: modifiers.create.map((m: any) => ({
+//               modifier: {
+//                 create: {
+//                   name: m.name,
+//                   description: m.description,
+//                   price: m.price,
+//                   type: m.type ?? "SINGLE",
+//                   isRequired: m.isRequired ?? false,
+//                   isActive: m.isActive ?? true,
+//                 }
+//               }
+//             }))
+//           }),
+//         },
+//       }),
+//     },
+//     include: {
+//       category: true,
+//       modifiers: { include: { modifier: true } },
+//     },
+//   })    
+// },
+
+async update(id: string, data: any, user?: any) {
+  const { modifiers, ingredients, ...itemData } = data;
+  
+  const updateData: any = { ...itemData };
+
+  // Handle modifiers
+  if (modifiers) {
+    updateData.modifiers = {
+      deleteMany: {},
+      ...(modifiers.connect && {
+        create: modifiers.connect.map(({ id }: { id: string }) => ({
+          modifier: { connect: { id } }
+        }))
+      })
+    };
+  }
+
+  // Handle ingredients
+  if (ingredients) {
+    updateData.menuItemIngredients = {
+      deleteMany: {},
+      ...(ingredients.create && {
+        create: ingredients.create.map((ing: any) => ({
+          inventoryItem: { connect: { id: ing.inventoryItemId } },
+          quantity: ing.quantity,
+          unit: ing.unit
+        }))
+      })
+    };
+  }
+
+  return prisma.menuItem.update({
     where: { id },
-    data: {
-      ...itemData,
-      ...(modifiers && {
-        modifiers: {
-          deleteMany: {}, // remove old links
-  
-          // connect existing modifiers
-          ...(modifiers.connect && {
-            create: modifiers.connect.map((m: any) => ({
-              modifier: {
-                connect: { id: m.id }
-              }
-            }))
-          }),
-  
-          // create new modifiers + link
-          ...(modifiers.create && {
-            create: modifiers.create.map((m: any) => ({
-              modifier: {
-                create: {
-                  name: m.name,
-                  description: m.description,
-                  price: m.price,
-                  type: m.type ?? "SINGLE",
-                  isRequired: m.isRequired ?? false,
-                  isActive: m.isActive ?? true,
-                }
-              }
-            }))
-          }),
-        },
-      }),
-    },
+    data: updateData,
     include: {
       category: true,
       modifiers: { include: { modifier: true } },
+      menuItemIngredients: { include: { inventoryItem: true } }
     },
-  })    
+  });
 },
 
   async remove(id: string, user?: any) {
@@ -442,23 +486,71 @@ export const menuItemService = {
 // --- Modifier ---
 export const modifierService = {
   async create(data: any) {
+    const { modifierIngredients, ...modifierData } = data;
+    
+    const createData: any = { ...modifierData };
+    
+    // Handle ingredients
+    if (modifierIngredients && modifierIngredients.create) {
+      createData.modifierIngredients = {
+        create: modifierIngredients.create.map((ing: any) => ({
+          inventoryItem: { connect: { id: ing.inventoryItemId } },
+          quantity: ing.quantity,
+          unit: ing.unit
+        }))
+      };
+    }
+
     return prisma.modifier.create({
-      data,
+      data: createData,
+      include: {
+        modifierIngredients: { include: { inventoryItem: true } }
+      }
     });
   },
 
   async list() {
-    return prisma.modifier.findMany();
+    return prisma.modifier.findMany({
+      include: {
+        modifierIngredients: { include: { inventoryItem: true } }
+      }
+    });
   },
 
   async get(id: string) {
-    return prisma.modifier.findUnique({ where: { id } });
+    return prisma.modifier.findUnique({ 
+      where: { id },
+      include: {
+        modifierIngredients: { include: { inventoryItem: true } }
+      }
+    });
   },
 
   async update(id: string, data: any) {
+    const { modifierIngredients, ...modifierData } = data;
+    
+    const updateData: any = { ...modifierData };
+    
+    // Handle ingredients
+    if (modifierIngredients) {
+      updateData.modifierIngredients = {
+        deleteMany: {},
+        ...(modifierIngredients.create && {
+          create: modifierIngredients.create.map((ing: any) => ({
+            inventoryItem: { connect: { id: ing.inventoryItemId } },
+            quantity: ing.quantity,
+            unit: ing.unit
+          }))
+        })
+      };
+    }
+
     return prisma.modifier.update({
       where: { id },
-      data,
+      data: updateData,
+      include: {
+        modifierIngredients: { include: { inventoryItem: true } }
+      }
     });
   },
 

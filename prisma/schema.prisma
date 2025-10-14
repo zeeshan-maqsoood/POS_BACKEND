@@ -92,6 +92,11 @@ enum PaymentMethod {
   OTHER
 }
 
+enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
 /* ===================== MODELS ===================== */
 
 model User {
@@ -110,6 +115,8 @@ model User {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   
+
+  InventoryTransaction InventoryTransaction[]
 }
 
 model UserPermission {
@@ -120,50 +127,7 @@ model UserPermission {
   createdAt   DateTime    @default(now())
 }
 
-model ProductCategory {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  description String?
-  products    Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
 
-model ProductSupplier {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  contactName String?
-  email       String?
-  phone       String?
-  address     String?
-  products    Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
-model Product {
-  id              String          @id @default(uuid())
-  name            String
-  category        ProductCategory? @relation(fields: [categoryId], references: [id])
-  categoryId      String?
-  supplier        ProductSupplier? @relation(fields: [supplierId], references: [id])
-  supplierId      String?
-  description     String?
-  barcode         String?
-  tags            String[]
-  costPrice       Float
-  salePrice       Float
-  takeawayPrice   Float?
-  retailPrice     Float?
-  taxRate         Float
-  takeawayTaxRate Float?
-  taxExempt       Boolean  @default(false)
-  tillOrder       Int      @default(0)
-  sellOnTill      Boolean  @default(true)
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
 
 model MenuCategory {
   id          String      @id @default(uuid())
@@ -193,10 +157,24 @@ model MenuItem {
   orderItems    OrderItem[]
   tags          String[]
   modifiers     MenuItemModifier[]
-  branchName        String?
+  menuItemIngredients MenuItemIngredient[]  // 👈 Add this line
+  branchName    String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   @@index([branchName])
+}
+model MenuItemIngredient {
+  id               String          @id @default(uuid())
+  menuItemId       String
+  menuItem         MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId  String
+  inventoryItem    InventoryItem   @relation(fields: [inventoryItemId], references: [id])
+  quantity         Float
+  unit             String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([menuItemId, inventoryItemId])
 }
 
 model Order {
@@ -254,17 +232,65 @@ model Payment {
 }
 
 model Modifier {
-  id            String            @id @default(uuid())
-  name          String
-  description   String?
-  price         Float             @default(0)
-  type          String            @default("SINGLE")
-  isRequired    Boolean           @default(false)
-  isActive      Boolean           @default(true)
-  menuItems     MenuItemModifier[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  price       Float         @default(0)
+  isRequired  Boolean       @default(false)
+  isActive    Boolean       @default(true)
+  type        String        @default("SINGLE")
+  minSelection Int          @default(0)
+  maxSelection Int          @default(1)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relationships
+  menuItems   MenuItemModifier[]
+  modifierIngredients ModifierIngredient[]
+  
+  @@map("modifiers")
+}
 
+model InventoryTransaction {
+  id              String   @id @default(cuid())
+  inventoryItemId String
+  type            TransactionType // INCOMING, OUTGOING, ADJUSTMENT
+  quantity        Float
+  reason          String
+  referenceId     String?  // Order ID, etc.
+  referenceType   String?  // ORDER, ADJUSTMENT, etc.
+  branchName      String?
+  previousQuantity Float
+  newQuantity     Float
+  createdAt       DateTime @default(now())
+  createdById     String?
+
+  // Relations
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  createdBy     User?         @relation(fields: [createdById], references: [id])
+
+  @@index([inventoryItemId])
+  @@index([referenceId, referenceType])
+  @@index([createdAt])
+}
+
+enum TransactionType {
+  INCOMING
+  OUTGOING
+  ADJUSTMENT
+}
+model ModifierIngredient {
+  id            String    @id @default(uuid())
+  modifierId    String
+  modifier      Modifier  @relation(fields: [modifierId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity      Float
+  unit          String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([modifierId, inventoryItemId])
 }
 
 model ModifierOption {
@@ -277,6 +303,71 @@ model ModifierOption {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
  
+}
+
+// Add to your models
+model InventoryCategory {
+  id          String               @id @default(uuid())
+  name        String
+  description String?
+  color       String               @default("bg-gray-500")
+  isActive    Boolean              @default(true)
+  branchName  String?
+  subcategories InventorySubcategory[]
+  items       InventoryItem[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  
+  @@index([branchName])
+  @@unique([name, branchName])
+}
+
+model InventorySubcategory {
+  id          String               @id @default(uuid())
+  name        String
+  description String?
+  categoryId  String
+  category    InventoryCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isActive    Boolean              @default(true)
+  branchName  String?
+  items       InventoryItem[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  
+  @@index([branchName])
+  @@index([categoryId])
+  @@unique([name, categoryId, branchName])
+}
+
+model InventoryItem {
+  id             String               @id @default(uuid())
+  name           String
+  description    String?
+  categoryId     String
+  category       InventoryCategory    @relation(fields: [categoryId], references: [id])
+  subcategoryId  String?
+  subcategory    InventorySubcategory? @relation(fields: [subcategoryId], references: [id])
+  quantity       Float
+  unit           String
+  cost           Float                // Keep cost for inventory valuation
+  minStock       Float
+  maxStock       Float
+  supplier       String
+  location       String
+  status         InventoryStatus
+  branchName     String?
+  expiryDate     DateTime?
+  lastUpdated    DateTime             @default(now())
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  
+  @@index([branchName])
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([status])
+  MenuItemIngredient MenuItemIngredient[]
+  ModifierIngredient ModifierIngredient[]
+  InventoryTransaction InventoryTransaction[]
 }
 
 

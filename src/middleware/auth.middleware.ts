@@ -131,9 +131,9 @@ type ValidatedData = {
 export const validateRequest = (schema: JoiSchema): RequestHandler => {
   return (req, res, next) => {
     try {
+      console.log(req.body,"body")
       const dataToValidate: ValidatedData = {};
       const validationErrors: { [key: string]: string[] } = {};
-      
       // Validate body if schema exists
       if (schema.body) {
         const { error, value } = schema.body.validate(req.body, { abortEarly: false });

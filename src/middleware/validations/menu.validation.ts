@@ -34,7 +34,19 @@ export const createMenuItemSchema = Joi.object({
       })
     )
   }).optional(),
+  // Ingredients field for many-to-many relationship
+  ingredients: Joi.object({
+    create: Joi.array().items(
+      Joi.object({
+        inventoryItemId: Joi.string().optional(),
+        quantity: Joi.number().min(0.01).optional(),
+        unit: Joi.string().optional()
+      })
+    )
+  }).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
+  createdAt:Joi.string().optional().allow(null),
+  updatedAt:Joi.string().optional().allow(null)
 });
 
 
@@ -46,10 +58,21 @@ export const updateMenuItemSchema = createMenuItemSchema.fork(
 // --- Modifier ---
 export const createModifierSchema = Joi.object({
   name: Joi.string().required(),
-  description: Joi.string().allow(""),
-  price: Joi.number().min(0).default(0),
+  description: Joi.string().allow("").optional(),
+  price: Joi.number().min(0).required(),
   isRequired: Joi.boolean().default(false),
-  isActive: Joi.boolean().default(true)
+  isActive: Joi.boolean().default(true),
+  type: Joi.string().valid('SINGLE', 'MULTIPLE').default('SINGLE'),
+
+  modifierIngredients: Joi.object({
+    create: Joi.array().items(
+      Joi.object({
+        inventoryItemId: Joi.string().required(),
+        quantity: Joi.number().min(0.01).required(),
+        unit: Joi.string().required()
+      })
+    )
+  }).optional(),
 });
 
 
