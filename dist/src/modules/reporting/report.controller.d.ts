@@ -1,0 +1,24 @@
+import { Request, Response } from 'express';
+export declare const reportsController: {
+    getSalesOverview(req: Request, res: Response): Promise<void>;
+    getOrderReports(req: Request, res: Response): Promise<void>;
+    getPaymentReports(req: Request, res: Response): Promise<void>;
+    getInventoryStatus(req: Request, res: Response): Promise<void>;
+    getInventoryTransactions(req: Request, res: Response): Promise<void>;
+    getLowStockAlerts(req: Request, res: Response): Promise<void>;
+    getMenuPerformance(req: Request, res: Response): Promise<void>;
+    getCategoryPerformance(req: Request, res: Response): Promise<void>;
+    getBranchPerformance(req: Request, res: Response): Promise<void>;
+    getBranchComparison(req: Request, res: Response): Promise<void>;
+    getStaffPerformance(req: Request, res: Response): Promise<void>;
+    getStaffActivity(req: Request, res: Response): Promise<void>;
+    getRevenueReports(req: Request, res: Response): Promise<void>;
+    getTaxReports(req: Request, res: Response): Promise<void>;
+    getDashboardOverview(req: Request, res: Response): Promise<void>;
+    getTimeAnalytics(req: Request, res: Response): Promise<void>;
+    getSalesByHour(req: Request, res: Response): Promise<void>;
+    getPeakHoursAnalysis(req: Request, res: Response): Promise<void>;
+    getCustomerBehaviorAnalytics(req: Request, res: Response): Promise<void>;
+    getProductPerformanceByTime(req: Request, res: Response): Promise<void>;
+    getStaffPerformanceByTime(req: Request, res: Response): Promise<void>;
+};
