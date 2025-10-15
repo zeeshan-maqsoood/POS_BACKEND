@@ -27,7 +27,7 @@ router.get("/", checkPermission([Permission.USER_READ]), userController.getUsers
 router.post(
   "/",
   checkPermission([Permission.USER_CREATE]),
-  userController.createUser
+  userController.createManager
 );
 
 // GET user by ID (needs permission)

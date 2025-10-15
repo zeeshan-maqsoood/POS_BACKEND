@@ -325,8 +325,8 @@ class PrintService {
             kitchen: 'HP LaserJet P1005'
         },
         'Leeds': {
-            manager: 'Leeds_Manager_Printer',
-            kitchen: 'Leeds_Kitchen_Printer'
+            manager: 'HP LaserJet P1005',
+            kitchen: 'HP LaserJet P1005'
         },
         'default': {
             manager: 'Microsoft Print to PDF',
@@ -356,6 +356,10 @@ class PrintService {
                 // Status change receipt
                 managerContent = this.formatStatusReceipt(order);
                 console.log('Status change receipt generated');
+            } else if (order.isPartialUpdate) {
+                // Partial update receipt - show only new/updated items
+                managerContent = this.formatPartialUpdateReceipt(order);
+                console.log('Partial update receipt generated for manager');
             } else {
                 // Standard order receipt
                 managerContent = this.formatManagerReceipt(order);

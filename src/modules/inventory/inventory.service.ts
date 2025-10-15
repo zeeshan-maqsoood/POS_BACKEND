@@ -678,3 +678,347 @@ export const inventoryItemService = {
     });
   },
 };
+
+// --- Supplier Service ---
+export const supplierService = {
+ async create(data: any, user?: any) {
+    try {
+      console.log(data, "supplier data");
+      console.log(user, "supplier user");
+
+      // Generate supplier code if not provided
+      if (!data.code) {
+        const lastSupplier = await prisma.supplier.findFirst({
+          orderBy: { code: 'desc' },
+          take: 1
+        });
+        const nextNumber = lastSupplier ? parseInt(lastSupplier.code.replace('SUP', '')) + 1 : 1;
+        data.code = `SUP${nextNumber.toString().padStart(3, '0')}`;
+      }
+
+      // Prepare the base data
+      const createData: any = {
+        code: data.code,
+        name: data.name,
+        legalName: data.legalName || null,
+        description: data.description || null,
+        taxNumber: data.taxNumber || null,
+        registrationNumber: data.registrationNumber || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        mobile: data.mobile || null,
+        website: data.website || null,
+        address: data.address || null,
+        city: data.city || null,
+        state: data.state || null,
+        country: data.country || 'US',
+        postalCode: data.postalCode || null,
+        businessType: data.businessType || null,
+        industry: data.industry || null,
+        status: data.status || 'ACTIVE',
+        rating: data.rating || 'AVERAGE',
+        paymentTerms: data.paymentTerms || 'NET_30',
+        bankName: data.bankName || null,
+        bankAccount: data.bankAccount || null,
+        bankRouting: data.bankRouting || null,
+        currency: data.currency || 'USD',
+        notes: data.notes || null,
+      };
+
+      // Add numeric fields only if they have values
+      if (data.establishedYear) {
+        createData.establishedYear = parseInt(data.establishedYear);
+      }
+      if (data.employeeCount) {
+        createData.employeeCount = parseInt(data.employeeCount);
+      }
+      if (data.creditLimit) {
+        createData.creditLimit = parseFloat(data.creditLimit);
+      }
+
+      // Add the createdBy relation if user exists - use userId from your JWT payload
+      const userId = user?.userId || user?.id;
+      if (userId) {
+        createData.createdBy = {
+          connect: { id: userId }
+        };
+      } else {
+        // If no user ID, you might want to handle this case
+        // Either throw an error or set a default user
+        throw new Error('User ID is required to create a supplier');
+      }
+
+      console.log('Final create data:', createData);
+
+      return await prisma.supplier.create({
+        data: createData,
+        include: {
+          contacts: true,
+          products: {
+            include: {
+              inventoryItem: true
+            }
+          },
+          purchaseOrders: {
+            take: 5,
+            orderBy: { createdAt: 'desc' }
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error creating supplier:', error);
+      throw error;
+    }
+  },
+
+
+  async list(user?: any, queryParams?: any) {
+    const where: any = {};
+
+    console.log('SupplierService.list called with:', {
+      userRole: user?.role,
+      userBranch: user?.branch,
+      queryParams: queryParams
+    });
+
+    // If status is provided as a query parameter, use it for filtering
+    if (queryParams?.status) {
+      where.status = queryParams.status;
+    }
+
+    if (queryParams?.name) {
+      where.name = {
+        contains: queryParams.name,
+        mode: 'insensitive'
+      };
+    }
+
+    const suppliers = await prisma.supplier.findMany({
+      where,
+      include: {
+        contacts: true,
+        products: {
+          include: {
+            inventoryItem: true
+          }
+        },
+        purchaseOrders: {
+          take: 5,
+          orderBy: { createdAt: 'desc' }
+        },
+        _count: {
+          select: {
+            purchaseOrders: true,
+            products: true
+          }
+        }
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    return suppliers.map(supplier => ({
+      ...supplier,
+      purchaseOrderCount: supplier._count.purchaseOrders,
+      productCount: supplier._count.products
+    }));
+  },
+
+  async get(id: string, user?: any) {
+    const supplier = await prisma.supplier.findUnique({
+      where: { id },
+      include: {
+        contacts: true,
+        products: {
+          include: {
+            inventoryItem: true
+          }
+        },
+        purchaseOrders: {
+          take: 10,
+          orderBy: { createdAt: 'desc' }
+        },
+        evaluations: {
+          take: 5,
+          orderBy: { evaluationDate: 'desc' }
+        }
+      }
+    });
+
+    if (!supplier) return null;
+
+    return supplier;
+  },
+
+  async update(id: string, data: any, user?: any) {
+    console.log(data, "updatedSupplierData")
+
+    // First verify the supplier exists
+    const existing = await prisma.supplier.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new Error('Supplier not found');
+    }
+
+    // Remove createdById from data if it exists (shouldn't be updatable)
+    const { createdById, ...updateData } = data;
+
+    return prisma.supplier.update({
+      where: { id },
+      data: updateData,
+      include: {
+        contacts: true,
+        products: {
+          include: {
+            inventoryItem: true
+          }
+        },
+        purchaseOrders: {
+          take: 5,
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+  },
+
+  async remove(id: string, user?: any) {
+    // First verify the supplier exists
+    const existing = await prisma.supplier.findUnique({
+      where: { id },
+      include: {
+        purchaseOrders: true,
+        products: true
+      }
+    });
+
+    if (!existing) {
+      throw new Error('Supplier not found');
+    }
+
+    // Prevent deleting suppliers with active purchase orders or products
+    if (existing.purchaseOrders.length > 0) {
+      throw new Error('Cannot delete supplier with active purchase orders');
+    }
+
+    if (existing.products.length > 0) {
+      throw new Error('Cannot delete supplier with associated products');
+    }
+
+    return prisma.supplier.delete({
+      where: { id }
+    });
+  },
+
+  // Supplier product association functions
+  async addProductToSupplier(supplierId: string, inventoryItemId: string, supplierProductData: any, user?: any) {
+    // First verify the supplier exists
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: supplierId }
+    });
+
+    if (!supplier) {
+      throw new Error('Supplier not found');
+    }
+
+    // Verify the inventory item exists
+    const inventoryItem = await prisma.inventoryItem.findUnique({
+      where: { id: inventoryItemId }
+    });
+
+    if (!inventoryItem) {
+      throw new Error('Inventory item not found');
+    }
+
+    // Check if the supplier-product relationship already exists
+    const existingRelation = await prisma.supplierProduct.findUnique({
+      where: {
+        supplierId_inventoryItemId: {
+          supplierId,
+          inventoryItemId
+        }
+      }
+    });
+
+    if (existingRelation) {
+      throw new Error('Supplier-product relationship already exists');
+    }
+
+    return prisma.supplierProduct.create({
+      data: {
+        supplierId,
+        inventoryItemId,
+        ...supplierProductData
+      },
+      include: {
+        supplier: true,
+        inventoryItem: true
+      }
+    });
+  },
+
+  async getSupplierProducts(supplierId: string, user?: any) {
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: supplierId },
+      include: {
+        products: {
+          include: {
+            inventoryItem: true
+          }
+        }
+      }
+    });
+
+    if (!supplier) {
+      throw new Error('Supplier not found');
+    }
+
+    return supplier.products;
+  },
+
+  async updateSupplierProduct(supplierProductId: string, data: any, user?: any) {
+    const existing = await prisma.supplierProduct.findUnique({
+      where: { id: supplierProductId },
+      include: {
+        supplier: true,
+        inventoryItem: true
+      }
+    });
+
+    if (!existing) {
+      throw new Error('Supplier product relationship not found');
+    }
+
+    return prisma.supplierProduct.update({
+      where: { id: supplierProductId },
+      data: data,
+      include: {
+        supplier: true,
+        inventoryItem: true
+      }
+    });
+  },
+
+  async removeSupplierProduct(supplierProductId: string, user?: any) {
+    const existing = await prisma.supplierProduct.findUnique({
+      where: { id: supplierProductId }
+    });
+
+    if (!existing) {
+      throw new Error('Supplier product relationship not found');
+    }
+
+    return prisma.supplierProduct.delete({
+      where: { id: supplierProductId }
+    });
+  },
+};

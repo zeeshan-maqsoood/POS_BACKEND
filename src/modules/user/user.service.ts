@@ -1,4 +1,4 @@
-import { Prisma, User, UserRole, Permission } from '@prisma/client';
+import { Prisma, User, UserRole, Permission, DayOfWeek } from '@prisma/client';
 import prisma from '../../loaders/prisma';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
@@ -12,6 +12,7 @@ type UserWithPermissions = User & {
   permissions: Permission[];
   branch?: string | null;
 };
+
 
 type LoginResponse = {
   user: Omit<SafeUser, 'permissions'> & { permissions: string[] };
@@ -62,7 +63,6 @@ export const userService = {
 
     // Set default role if not provided
     const role = data.role || UserRole.CUSTOMER;
-
     // Hash password
     const hashedPassword = await hashPassword(data.password);
 
@@ -77,9 +77,12 @@ export const userService = {
         createdById: currentUser?.userId || null,
       };
 
-      // Add branch if provided
-      if (data.branch !== undefined) {
-        userData.branch = data.branch;
+      // Add shift schedule if provided
+      if (data.shiftSchedule !== undefined) {
+        userData.shiftSchedule = data.shiftSchedule;
+      }
+      if (data.isShiftActive !== undefined) {
+        userData.isShiftActive = data.isShiftActive;
       }
 
       const newUser = await prisma.user.create({
@@ -97,6 +100,7 @@ export const userService = {
           name: true,
           branch: true,
           role: true,
+          status: true,
           permissions: {
             select: {
               id: true,
@@ -105,6 +109,8 @@ export const userService = {
               createdAt: true,
             },
           },
+          shiftSchedule: true,
+          isShiftActive: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -117,12 +123,15 @@ export const userService = {
         name: newUser.name,
         branch: newUser.branch || null,
         role: newUser.role,
-        permissions: newUser.permissions.map(p => ({
+        status: newUser.status,
+        permissions: newUser.permissions.map((p: any) => ({
           id: p.id,
           userId: p.userId,
           permission: p.permission as Permission,
           createdAt: p.createdAt,
         })),
+        shiftSchedule: newUser.shiftSchedule as SafeUser['shiftSchedule'] || null,
+        isShiftActive: newUser.isShiftActive || false,
         createdAt: newUser.createdAt,
         updatedAt: newUser.updatedAt,
       };
@@ -142,11 +151,23 @@ export const userService = {
     permissions?: Permission[];
     branch?: string | null;
     role?: UserRole; // Allow role to be passed optionally
+    shiftSchedule?: {
+      MONDAY?: { startTime?: string; endTime?: string };
+      TUESDAY?: { startTime?: string; endTime?: string };
+      WEDNESDAY?: { startTime?: string; endTime?: string };
+      THURSDAY?: { startTime?: string; endTime?: string };
+      FRIDAY?: { startTime?: string; endTime?: string };
+      SATURDAY?: { startTime?: string; endTime?: string };
+      SUNDAY?: { startTime?: string; endTime?: string };
+    };
+
+    isShiftActive?: boolean;
   }, currentUser: JwtPayload): Promise<SafeUser> => {
     if (currentUser.role !== UserRole.ADMIN) {
       throw ApiError.forbidden('Only admins can create managers');
     }
-
+    console.log("creating manager service")
+    console.log(data, "data")
     // Default manager permissions if none provided
     const defaultManagerPermissions: Permission[] = [
       'POS_CREATE',
@@ -164,6 +185,8 @@ export const userService = {
       ...data,
       role: data.role || UserRole.MANAGER,
       permissions: data.permissions || defaultManagerPermissions,
+      shiftSchedule: data.shiftSchedule,
+      isShiftActive: data.isShiftActive || false,
     };
 
     // Only include branch if it's provided
@@ -188,15 +211,26 @@ export const userService = {
             in: [UserRole.MANAGER, UserRole.KITCHEN_STAFF],
           },
         },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          branch: true,
+          role: true,
+          status: true,
           permissions: {
             select: {
               id: true,
               permission: true,
               userId: true,
               createdAt: true,
+
             },
           },
+          shiftSchedule: true,
+          isShiftActive: true,
+          createdAt: true,
+          updatedAt: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -207,20 +241,25 @@ export const userService = {
         name: user.name,
         branch: user.branch || null,
         role: user.role,
-        permissions: user.permissions.map(p => ({
+        permissions: user.permissions.map((p: any) => ({
           id: p.id,
           userId: p.userId,
           permission: p.permission as Permission,
           createdAt: p.createdAt,
         })),
+        shiftSchedule: user.shiftSchedule as SafeUser['shiftSchedule'] || null,
+        isShiftActive: user.isShiftActive || false,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        status: user.status
       }));
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw ApiError.internal('Failed to fetch users');
     }
   },
+
+
 
   // Get user by ID
   getUserById: async (id: string, currentUser: JwtPayload): Promise<SafeUser | null> => {
@@ -232,7 +271,13 @@ export const userService = {
 
       const user = await prisma.user.findUnique({
         where: { id },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          branch: true,
+          role: true,
+          status: true,
           permissions: {
             select: {
               id: true,
@@ -241,6 +286,10 @@ export const userService = {
               createdAt: true,
             },
           },
+          shiftSchedule: true,
+          isShiftActive: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
 
@@ -261,8 +310,11 @@ export const userService = {
           permission: p.permission as Permission,
           createdAt: p.createdAt,
         })),
+        shiftSchedule: user.shiftSchedule as SafeUser['shiftSchedule'] || null,
+        isShiftActive: user.isShiftActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        status: user.status
       };
     } catch (error) {
       console.error('Error fetching user by ID:', error);
@@ -276,7 +328,13 @@ export const userService = {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          branch: true,
+          role: true,
+          status: true,
           permissions: {
             select: {
               id: true,
@@ -285,6 +343,10 @@ export const userService = {
               createdAt: true,
             },
           },
+          shiftSchedule: true,
+          isShiftActive: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
 
@@ -305,8 +367,11 @@ export const userService = {
           permission: p.permission as Permission,
           createdAt: p.createdAt,
         })),
+        shiftSchedule: user.shiftSchedule as SafeUser['shiftSchedule'] || null,
+        isShiftActive: user.isShiftActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        status: user.status
       };
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -323,7 +388,7 @@ export const userService = {
         where: { id },
         include: { permissions: true }
       });
-
+      console.log(data, "data")
       if (!existingUser) {
         throw ApiError.notFound('User not found');
       }
@@ -334,7 +399,7 @@ export const userService = {
       }
 
       // Prepare update data - exclude status as it's not a valid field
-      const { permissions, status, ...updateData } = data;
+      const { permissions, ...updateData } = data;
 
       // Hash password if it's being updated
       if (updateData.password) {
@@ -347,16 +412,23 @@ export const userService = {
         const updatedUser = await tx.user.update({
           where: { id },
           data: {
-            ...updateData,
-            ...(permissions && {
+            ...(updateData as any),
+            ...(data.permissions && {
               permissions: {
                 deleteMany: {},
-                create: permissions.map(permission => ({ permission }))
+                create: data.permissions.map((permission: Permission) => ({ permission }))
               }
             })
           },
           include: {
-            permissions: true
+            permissions: {
+              select: {
+                id: true,
+                userId: true,
+                permission: true,
+                createdAt: true,
+              },
+            },
           }
         });
 
@@ -367,12 +439,15 @@ export const userService = {
           name: updatedUser.name,
           branch: updatedUser.branch || null,
           role: updatedUser.role,
-          permissions: updatedUser.permissions.map(p => ({
+          status: updatedUser.status,
+          permissions: updatedUser.permissions.map((p: any) => ({
             id: p.id,
             userId: p.userId,
             permission: p.permission as Permission,
             createdAt: p.createdAt,
           })),
+          shiftSchedule: updatedUser.shiftSchedule as SafeUser['shiftSchedule'],
+          isShiftActive: updatedUser.isShiftActive,
           createdAt: updatedUser.createdAt,
           updatedAt: updatedUser.updatedAt,
         };
@@ -487,6 +562,7 @@ export const userService = {
           name: user.name,
           branch: user.branch || null,
           role: user.role,
+          status: user.status,
           permissions: user.permissions.map((p) => p.permission),
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,

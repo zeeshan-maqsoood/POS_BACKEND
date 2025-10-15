@@ -2,7 +2,8 @@ import { Router } from "express";
 import { 
   inventoryCategoryController, 
   inventorySubcategoryController, 
-  inventoryItemController 
+  inventoryItemController,
+  supplierController
 } from "./inventory.controller";
 import { authenticateJWT, checkPermission, validateRequest } from "../../middleware/auth.middleware";
 import { PERMISSIONS } from "../../types/auth.types";
@@ -30,5 +31,18 @@ router.get("/items/:id", checkPermission([PERMISSIONS.PRODUCT_READ]), inventoryI
 router.post("/items", checkPermission([PERMISSIONS.PRODUCT_CREATE]), inventoryItemController.create);
 router.put("/items/:id", checkPermission([PERMISSIONS.PRODUCT_UPDATE]), inventoryItemController.update);
 router.delete("/items/:id", checkPermission([PERMISSIONS.PRODUCT_DELETE]), inventoryItemController.remove);
+
+// --- Suppliers ---
+router.get("/suppliers", checkPermission([PERMISSIONS.SUPPLIER_READ]), supplierController.list);
+router.get("/suppliers/:id", checkPermission([PERMISSIONS.SUPPLIER_READ]), supplierController.get);
+router.post("/suppliers", checkPermission([PERMISSIONS.SUPPLIER_CREATE]), supplierController.create);
+router.put("/suppliers/:id", checkPermission([PERMISSIONS.SUPPLIER_UPDATE]), supplierController.update);
+router.delete("/suppliers/:id", checkPermission([PERMISSIONS.SUPPLIER_DELETE]), supplierController.remove);
+
+// --- Supplier Products ---
+router.get("/suppliers/:supplierId/products", checkPermission([PERMISSIONS.SUPPLIER_READ]), supplierController.getProducts);
+router.post("/suppliers/:supplierId/products", checkPermission([PERMISSIONS.SUPPLIER_UPDATE]), supplierController.addProduct);
+router.put("/supplier-products/:supplierProductId", checkPermission([PERMISSIONS.SUPPLIER_UPDATE]), supplierController.updateProduct);
+router.delete("/supplier-products/:supplierProductId", checkPermission([PERMISSIONS.SUPPLIER_UPDATE]), supplierController.removeProduct);
 
 export default router;

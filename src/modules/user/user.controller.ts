@@ -35,6 +35,7 @@ export const getUser = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   try {
+    console.log("user controller")
     const user = await userService.createUser(req.body, req.user as JwtPayload);
     const response = ApiResponse.success(user, 'User created successfully', 201);
     ApiResponse.send(res, response);
@@ -48,6 +49,7 @@ export const createUser = async (req: Request, res: Response) => {
 
 export const createManager = async (req: Request, res: Response) => {
   try {
+    console.log("creating manager")
     // Set default manager role and permissions if not provided
     const managerData = {
       ...req.body,

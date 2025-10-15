@@ -1,5 +1,5 @@
 import prisma from '../../loaders/prisma';
-import { InventoryStatus, OrderStatus, PaymentMethod, OrderType } from '@prisma/client';
+import { InventoryStatus, OrderStatus, PaymentMethod, OrderType,SupplierStatus,PurchaseOrderStatus,InvoiceStatus,PaymentTerm,ReceivingStatus } from '@prisma/client';
 
 interface ReportParams {
   startDate?: string;
@@ -389,13 +389,15 @@ export const reportsService = {
     try {
       const { startDate, endDate, branchName, categoryId, user } = params;
 
-      const where = buildWhereClause({ startDate, endDate, branchName, user });
+      const baseWhere = buildWhereClause({ startDate, endDate, branchName, user });
+      const where = { ...baseWhere, paymentStatus: 'PAID' };
 
       // Get order items with menu item details
       const orderItems = await prisma.orderItem.findMany({
         where: {
           order: where,
           menuItemId: { not: null }
+          
         },
         include: {
           menuItem: {
@@ -462,7 +464,8 @@ export const reportsService = {
     try {
       const { startDate, endDate, branchName, user } = params;
 
-      const where = buildWhereClause({ startDate, endDate, branchName, user });
+      const baseWhere = buildWhereClause({ startDate, endDate, branchName, user });
+      const where = { ...baseWhere, paymentStatus: 'PAID' };
 
       const orderItems = await prisma.orderItem.findMany({
         where: {
@@ -531,7 +534,7 @@ export const reportsService = {
     try {
       const { startDate, endDate, user } = params;
 
-      const where = buildWhereClause({ startDate, endDate, user });
+      const where = { ...buildWhereClause({ startDate, endDate, user }), paymentStatus: 'PAID' };
 
       const branchPerformance = await prisma.order.groupBy({
         by: ['branchName'],
@@ -557,7 +560,7 @@ export const reportsService = {
           const [completedOrders, staffCount, inventoryValue] = await Promise.all([
             // Completed orders count
             prisma.order.count({
-              where: { ...branchWhere, status: 'COMPLETED' }
+              where: { ...branchWhere, status: 'COMPLETED', paymentStatus: 'PAID' }
             }),
             // Staff count
             prisma.user.count({
@@ -608,7 +611,7 @@ export const reportsService = {
     try {
       const { startDate, endDate, user } = params;
 
-      const where = buildWhereClause({ startDate, endDate, user });
+      const where = { ...buildWhereClause({ startDate, endDate, user }), paymentStatus: 'PAID' };
 
       const branchData = await prisma.order.groupBy({
         by: ['branchName', 'createdAt'],
@@ -691,7 +694,8 @@ export const reportsService = {
             where: {
               ...where,
               createdById: staff.createdById,
-              status: 'COMPLETED'
+              status: 'COMPLETED',
+              paymentStatus: 'PAID'
             }
           });
 

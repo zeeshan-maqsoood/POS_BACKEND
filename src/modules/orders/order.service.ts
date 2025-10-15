@@ -49,6 +49,28 @@ const checkBranchAccess = async (userId: string, branchName: string) => {
   return false;
 };
 
+// Helper function to log receipt to console
+const logReceiptToConsole = (order: any) => {
+  console.log(`\n========== RECEIPT FOR ORDER ${order.orderNumber} ==========`);
+  console.log(`Order Type: ${order.orderType}`);
+  console.log(`Status: ${order.status}`);
+  console.log(`Payment Status: ${order.paymentStatus}`);
+  console.log(`Payment Method: ${order.paymentMethod}`);
+  console.log(`Customer: ${order.customerName || 'N/A'} | Phone: ${order.customerPhone || 'N/A'}`);
+  console.log(`Table: ${order.tableNumber || 'N/A'}`);
+  console.log(`Branch: ${order.branchName}`);
+  console.log(`Created By: ${order.createdBy?.name || 'N/A'} (${order.createdBy?.email || 'N/A'})`);
+  console.log(`Items:`);
+  order.items.forEach((item: any, index: number) => {
+    console.log(`  ${index + 1}. ${item.name} x${item.quantity} @ ${item.price} = ${item.total}`);
+  });
+  console.log(`Subtotal: ${order.subtotal}`);
+  console.log(`Tax: ${order.tax}`);
+  console.log(`Total: ${order.total}`);
+  console.log(`Notes: ${order.notes || 'N/A'}`);
+  console.log(`=====================================\n`);
+};
+
 export const orderService = {
   // createOrder: async (data: CreateOrderInput, currentUser: JwtPayload) => {
   //   if (!data.tableNumber && !data.customerName) {
@@ -590,6 +612,9 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
       return createdOrder;
     });
 
+    // Log receipt to console after order creation
+    logReceiptToConsole(order);
+
     // Deduct inventory after order is successfully created
     try {
       await inventoryService.deductInventoryForOrder(order);
@@ -622,7 +647,19 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
     // Print receipts in background
     PrintService.printOrderReceipt(order)
-      .then(({ manager, kitchen }) => {
+      .then(result => {
+        console.log('PrintService result:', result); // Debug: Log the full result
+        const { manager, kitchen } = result;
+
+        // Log full receipt to console if printing succeeds
+        if (manager || kitchen) {
+          console.log('\n========== PHYSICAL RECEIPT CONTENT =========='); // Indicate it's the physical print content
+          logReceiptToConsole(order); // Log the receipt details to console
+          console.log('==========================================\n');
+        }
+
+        if (manager) console.log('Manager receipt printed successfully for order:', order.orderNumber);
+        if (kitchen) console.log('Kitchen receipt printed successfully for order:', order.orderNumber);
         if (!manager) console.warn('Failed to print manager receipt');
         if (!kitchen) console.warn('Failed to print kitchen receipt');
       })
@@ -821,12 +858,30 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
     // Print receipt when payment status is updated to PAID
     if (paymentStatus === 'PAID') {
       try {
-        await PrintService.printOrderReceipt(updatedOrder);
-        console.log('Receipt printed successfully for order:', updatedOrder.orderNumber);
+        const result = await PrintService.printOrderReceipt(updatedOrder);
+        console.log('PrintService result for payment update:', result); // Debug: Log the full result
+        const { manager, kitchen } = result;
+
+        // Log full receipt to console if printing succeeds
+        if (manager || kitchen) {
+          console.log('\n========== PHYSICAL RECEIPT CONTENT =========='); // Indicate it's the physical print content
+          logReceiptToConsole(updatedOrder); // Log the receipt details to console
+          console.log('==========================================\n');
+        }
+
+        if (manager) console.log('Manager receipt printed successfully for order:', updatedOrder.orderNumber);
+        if (kitchen) console.log('Kitchen receipt printed successfully for order:', updatedOrder.orderNumber);
+        if (!manager) console.warn('Failed to print manager receipt');
+        if (!kitchen) console.warn('Failed to print kitchen receipt');
       } catch (printError) {
         console.error('Failed to print receipt:', printError);
         // Don't fail the whole operation if printing fails
       }
+    }
+
+    // Log receipt to console when payment status is updated to PAID
+    if (paymentStatus === 'PAID') {
+      logReceiptToConsole(updatedOrder);
     }
 
     return updatedOrder;
@@ -1306,6 +1361,48 @@ export async function updateOrder(
 
         // Print in the background
         PrintService.printOrderReceipt(orderWithNewItems)
+          .then(result => {
+            console.log('PrintService result for update:', result); // Debug: Log the full result
+            const { manager, kitchen } = result;
+
+            // Log full receipt to console if printing succeeds
+            if (manager || kitchen) {
+              console.log('\n========== PHYSICAL RECEIPT CONTENT (NEW ITEMS) =========='); // Indicate it's for new items
+              logReceiptToConsole(orderWithNewItems); // Log the receipt details for new items
+              console.log('=====================================================\n');
+            }
+
+            if (manager && completeOrder) console.log('Manager receipt printed successfully for order:', completeOrder.orderNumber);
+            if (kitchen && completeOrder) console.log('Kitchen receipt printed successfully for order:', completeOrder.orderNumber);
+            if (!manager) console.warn('Failed to print manager receipt for updated order');
+            if (!kitchen) console.warn('Failed to print kitchen receipt for updated order');
+          })
+          .catch(error => {
+            console.error('Error printing receipt for updated order:', error);
+          });
+      }
+
+      // Log receipt to console after order update
+      if (completeOrder) {
+        // Note: Full receipt logging is now handled in the print success callback above
+        // Print receipt for the updated order
+        PrintService.printOrderReceipt(completeOrder)
+          .then(result => {
+            console.log('PrintService result for full update:', result); // Debug: Log the full result
+            const { manager, kitchen } = result;
+
+            // Log full receipt to console if printing succeeds
+            if (manager || kitchen) {
+              console.log('\n========== PHYSICAL RECEIPT CONTENT (FULL ORDER) =========='); // Indicate it's for the full order
+              logReceiptToConsole(completeOrder); // Log the receipt details for the full order
+              console.log('=======================================================\n');
+            }
+
+            if (manager) console.log('Manager receipt printed successfully for order:', completeOrder.orderNumber);
+            if (kitchen) console.log('Kitchen receipt printed successfully for order:', completeOrder.orderNumber);
+            if (!manager) console.warn('Failed to print manager receipt for updated order');
+            if (!kitchen) console.warn('Failed to print kitchen receipt for updated order');
+          })
           .catch(error => {
             console.error('Error printing receipt for updated order:', error);
           });
