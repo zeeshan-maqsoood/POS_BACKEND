@@ -9,6 +9,7 @@ import branchRoutes from "./branch/branch.routes";
 import analyticsRoutes from "./analytics/analytics.routes"
 import reportingRoutes from "./reporting/report.routes"
 import inventoryRoutes from "./inventory/inventory.routes"
+import shiftRoutes from "./shift/shift.routes"
 // import authRoutes from "./auth/auth.routes";
 
 const router = Router();
@@ -24,6 +25,7 @@ router.use("/receipts", receiptRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/reports", reportingRoutes);
 router.use("/inventory",inventoryRoutes)
+router.use("/shift",shiftRoutes)
 // router.use("/auth", authRoutes);
 
 export default router;

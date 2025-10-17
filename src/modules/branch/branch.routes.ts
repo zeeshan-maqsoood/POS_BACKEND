@@ -9,5 +9,5 @@ router.get("/", authenticate, getBranches);
 
 // GET /api/branches/all - Get all branches (admin only)
 router.get("/all", authenticate, getAllBranches);
-
+    
 export default router;

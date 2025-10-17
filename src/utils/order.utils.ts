@@ -9,6 +9,7 @@ export function generateOrderNumber(): string {
   return `ORD-${dateStr}-${randomNum}`;
 }
 
+
 /**
  * Calculates order totals including tax
  */

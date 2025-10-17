@@ -5,18 +5,17 @@ export const branchService = {
     // Get all unique branches from users table
     const users = await prisma.user.findMany({
       select: { branch: true },
-      where: { branch: { not: null } }
+      where: { branch: { not: null } } 
     });
-
     // Extract unique branches
     const branches = [...new Set(users.map(user => user.branch).filter(Boolean))];
-
+    
     return branches.map(branch => ({
       name: branch,
       value: branch
     }));
   },
-
+  
   async getUserBranches(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -38,8 +37,9 @@ export const branchService = {
         name: user.branch,
         value: user.branch
       }];
-    }
+    } 
 
+    
     return [];
   }
 };

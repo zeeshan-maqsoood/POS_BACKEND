@@ -191,7 +191,10 @@ enum DayOfWeek {
   SATURDAY
   SUNDAY
 }
-
+enum ShiftStatus {
+  ACTIVE
+  ENDED
+}
 /* ===================== MODELS ===================== */
 
 model User {
@@ -223,6 +226,8 @@ model User {
   supplierPayments      SupplierPayment[]
   supplierEvaluations   SupplierEvaluation[]
   InventoryTransaction  InventoryTransaction[]
+
+  Shift Shift[]
 }
 
 model UserPermission {
@@ -232,7 +237,22 @@ model UserPermission {
   permission  Permission
   createdAt   DateTime    @default(now())
 }
+model Shift {
+  id         String      @id @default(uuid())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  branchName String?     // match the rest of your schema (branchName)
+  startTime  DateTime
+  endTime    DateTime?
+  totalHours Float?
+  status     ShiftStatus @default(ACTIVE)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
+  @@index([userId])
+  @@index([branchName])
+  @@index([status])
+}
 /* ===================== SUPPLIER MODELS ===================== */
 
 model Supplier {
