@@ -1,220 +1,333 @@
 import prisma from "../../loaders/prisma";
-import { ApiError } from "../../utils/apiResponse";
-import { UserRole } from "@prisma/client";
 
-type JwtPayload = {
+export interface CreateShiftData {
   userId: string;
-  role: UserRole;
-  branch?: string | null;
-  // ...other fields you keep in JWT
-};
+  branchId?: string;
+  startTime: Date;
+  endTime?: Date;
+}
+
+export interface UpdateShiftData {
+  userId?: string;
+  branchId?: string;
+  startTime?: Date;
+  endTime?: Date;
+  status?: 'ACTIVE' | 'ENDED';
+}
 
 export const shiftService = {
-  // start shift for user - prevents multiple active shifts
-  async startShift(userId: string, branchName?: string) {
-    // Check for existing active shift
-    const active = await prisma.shift.findFirst({
-      where: { userId, status: "ACTIVE" },
-    });
-    if (active) {
-      throw ApiError.badRequest("An active shift already exists for this user");
+  async createShift(data: CreateShiftData) {
+    const startTime = new Date(data.startTime);
+    const endTime = data.endTime ? new Date(data.endTime) : null;
+
+    // Calculate total hours if end time is provided
+    let totalHours = null;
+    if (endTime && startTime) {
+      totalHours = Math.abs(endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
     }
 
-    const shift = await prisma.shift.create({
+    return await prisma.shift.create({
       data: {
-        userId,
-        branchName: branchName || null,
-        startTime: new Date(),
-        status: "ACTIVE",
-      },
-    });
-
-    return shift;
-  },
-
-  // end current active shift for user
-  async endShift(userId: string) {
-    const active = await prisma.shift.findFirst({
-      where: { userId, status: "ACTIVE" },
-      orderBy: { startTime: "desc" },
-    });
-
-    if (!active) {
-      throw ApiError.notFound("No active shift found for this user");
-    }
-
-    const endTime = new Date();
-    const totalHours = (endTime.getTime() - active.startTime.getTime()) / (1000 * 60 * 60);
-
-    const updated = await prisma.shift.update({
-      where: { id: active.id },
-      data: {
+        ...data,
+        startTime,
         endTime,
-        totalHours: parseFloat((Math.max(totalHours, 0)).toFixed(3)),
-        status: "ENDED",
+        totalHours,
+        status: 'ACTIVE'
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      }
     });
-
-    return updated;
   },
 
-  // get shifts for the current user (pagination optional)
-  async getUserShifts(userId: string, limit = 50, skip = 0) {
-    const shifts = await prisma.shift.findMany({
-      where: { userId },
-      orderBy: { startTime: "desc" },
-      take: limit,
-      skip,
-    });
-    return shifts;
-  },
-
-  // get shifts for a branch (manager / admin)
-  async getBranchShifts(branchName?: string, limit = 100, skip = 0) {
-    const whereClause = branchName ? { branchName } : {};
-    const shifts = await prisma.shift.findMany({
-      where: whereClause,
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
-      orderBy: { startTime: "desc" },
-      take: limit,
-      skip,
-    });
-    return shifts;
-  },
-
-  // get active shifts across branch (for managers to see who's on now)
-  async getActiveShifts(branchName?: string) {
-    const whereClause: any = { status: "ACTIVE" };
-    if (branchName) whereClause.branchName = branchName;
-    const shifts = await prisma.shift.findMany({
-      where: whereClause,
-      include: { user: { select: { id: true, name: true, role: true, branch: true } } },
-      orderBy: { startTime: "asc" },
-    });
-    return shifts;
-  },
-
-  // small report: shifts on a given date range
-  async getShiftsReport(branchName?: string, from?: Date, to?: Date) {
+  async getAllShifts(filters?: {
+    branchId?: string;
+    userId?: string;
+    status?: 'ACTIVE' | 'ENDED';
+    startDate?: Date;
+    endDate?: Date;
+  }) {
     const where: any = {};
-    if (branchName) where.branchName = branchName;
-    if (from && to) {
-      where.startTime = { gte: from, lte: to };
-    } else if (from) {
-      where.startTime = { gte: from };
-    } else if (to) {
-      where.startTime = { lte: to };
+
+    if (filters?.branchId) {
+      where.branchId = filters.branchId;
     }
 
-    const shifts = await prisma.shift.findMany({
+    if (filters?.userId) {
+      where.userId = filters.userId;
+    }
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) {
+        where.createdAt.gte = filters.startDate;
+      }
+      if (filters.endDate) {
+        where.createdAt.lte = filters.endDate;
+      }
+    }
+
+    return await prisma.shift.findMany({
       where,
-      include: { user: { select: { id: true, name: true, role: true } } },
-      orderBy: { startTime: "desc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      },
+      orderBy: { startTime: 'desc' }
     });
-
-    // aggregate totals
-    const totalHours = shifts.reduce((s, sh) => s + (sh.totalHours || 0), 0);
-
-    return { shifts, totalHours };
   },
 
-  // get a specific shift by ID
-  async getShiftById(shiftId: string) {
-    const shift = await prisma.shift.findUnique({
-      where: { id: shiftId },
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
+  async getShiftById(id: string) {
+    return await prisma.shift.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      }
     });
-
-    if (!shift) {
-      throw ApiError.notFound("Shift not found");
-    }
-
-    return shift;
   },
 
-  // update shift details (admin only)
-  async updateShift(shiftId: string, updateData: any) {
-    // Check if shift exists
-    const existingShift = await prisma.shift.findUnique({
-      where: { id: shiftId },
-    });
+  async getUserShifts(userId: string, filters?: {
+    status?: 'ACTIVE' | 'ENDED';
+    startDate?: Date;
+    endDate?: Date;
+  }) {
+    const where: any = { userId };
 
-    if (!existingShift) {
-      throw ApiError.notFound("Shift not found");
+    if (filters?.status) {
+      where.status = filters.status;
     }
 
-    // Update the shift
-    const updatedShift = await prisma.shift.update({
-      where: { id: shiftId },
+    if (filters?.startDate || filters?.endDate) {
+      where.startTime = {};
+      if (filters.startDate) {
+        where.startTime.gte = filters.startDate;
+      }
+      if (filters.endDate) {
+        where.startTime.lte = filters.endDate;
+      }
+    }
+
+    return await prisma.shift.findMany({
+      where,
+      include: {
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      },
+      orderBy: { startTime: 'desc' }
+    });
+  },
+
+  async getActiveShifts(branchId?: string) {
+    const where: any = { status: 'ACTIVE' };
+
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
+    return await prisma.shift.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      },
+      orderBy: { startTime: 'asc' }
+    });
+  },
+
+  async updateShift(id: string, data: UpdateShiftData) {
+    const updateData: any = { ...data };
+
+    // Recalculate total hours if start or end time is updated
+    if (data.startTime || data.endTime) {
+      const shift = await prisma.shift.findUnique({ where: { id } });
+      if (shift) {
+        const startTime = data.startTime || shift.startTime;
+        const endTime = data.endTime || shift.endTime;
+
+        if (startTime && endTime) {
+          updateData.totalHours = Math.abs(endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        } else if (startTime && !endTime) {
+          // If only start time is provided and shift is active, don't calculate hours yet
+          updateData.totalHours = null;
+        }
+      }
+    }
+
+    return await prisma.shift.update({
+      where: { id },
       data: updateData,
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      }
     });
-
-    return updatedShift;
   },
 
-  // delete a shift (admin only)
-  async deleteShift(shiftId: string) {
-    // Check if shift exists
-    const existingShift = await prisma.shift.findUnique({
-      where: { id: shiftId },
+  async endShift(id: string, endTime?: Date) {
+    const end = endTime || new Date();
+
+    return await this.updateShift(id, {
+      endTime: end,
+      status: 'ENDED'
     });
-
-    if (!existingShift) {
-      throw ApiError.notFound("Shift not found");
-    }
-
-    // Delete the shift
-    await prisma.shift.delete({
-      where: { id: shiftId },
-    });
-
-    return { success: true };
   },
 
-  // get active shift status for a user
-  async getActiveShiftStatus(userId: string) {
-    const activeShift = await prisma.shift.findFirst({
-      where: {
-        userId,
-        status: "ACTIVE"
-      },
-      orderBy: { startTime: "desc" },
+  async deleteShift(id: string) {
+    return await prisma.shift.delete({
+      where: { id }
     });
-
-    return {
-      hasActiveShift: !!activeShift,
-      activeShift: activeShift || undefined,
-    };
   },
 
-  // get shift statistics for a date range
-  async getShiftStats(branchName?: string, from?: Date, to?: Date) {
-    const where: any = {};
-    if (branchName) where.branchName = branchName;
-    if (from && to) {
-      where.startTime = { gte: from, lte: to };
-    } else if (from) {
-      where.startTime = { gte: from };
-    } else if (to) {
-      where.startTime = { lte: to };
-    }
-    
-
-    const shifts = await prisma.shift.findMany({
-      where,
-    });
+  async getShiftStats(filters?: {
+    branchId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }) {
+    const shifts = await this.getAllShifts(filters);
 
     const totalShifts = shifts.length;
-    const totalHours = shifts.reduce((sum, shift) => sum + (shift.totalHours || 0), 0);
-    const averageHoursPerShift = totalShifts > 0 ? totalHours / totalShifts : 0;
-    const activeShifts = shifts.filter(shift => shift.status === "ACTIVE").length;
+    const activeShifts = shifts.filter(s => s.status === 'ACTIVE').length;
+    const endedShifts = shifts.filter(s => s.status === 'ENDED').length;
+
+    const totalHours = shifts
+      .filter(s => s.totalHours)
+      .reduce((sum, s) => sum + (s.totalHours || 0), 0);
+
+    const averageHours = totalShifts > 0 ? totalHours / endedShifts : 0;
 
     return {
       totalShifts,
-      totalHours,
-      averageHoursPerShift: parseFloat(averageHoursPerShift.toFixed(2)),
       activeShifts,
+      endedShifts,
+      totalHours,
+      averageHours: Math.round(averageHours * 100) / 100
     };
   },
+
+  async getUsersForShiftAssignment(branchId?: string) {
+    const where: any = {
+      status: 'ACTIVE',
+      role: {
+        in: ['MANAGER', 'CASHIER', 'WAITER', 'KITCHEN_STAFF']
+      }
+    };
+
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            restaurantName: true
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    return users.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      branch: user.branch
+    }));
+  },
+
+  async getBranchesForShift() {
+    return await prisma.branch.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        restaurantName: true
+      },
+      orderBy: { name: 'asc' }
+    });
+  }
 };

@@ -1,31 +1,52 @@
 import { Router } from "express";
-import { shiftController } from "./shift.controller";
-import { authenticateJWT, checkRole, checkPermission } from "../../middleware/auth.middleware";
-import { UserRole } from "@prisma/client";
+import {
+  getAllShifts,
+  getShiftById,
+  getUserShifts,
+  getActiveShifts,
+  getShiftStats,
+  createShift,
+  updateShift,
+  endShift,
+  deleteShift,
+  getUsersForShiftAssignment,
+  getBranchesForShift
+} from "./shift.controllers";
+import { authenticate } from "../../middleware/authenticate";
 
 const router = Router();
-router.use(authenticateJWT);
 
-// Any authenticated staff can start/end their own shifts
-router.post("/start", shiftController.startShift);
-router.post("/end", shiftController.endShift);
-router.get("/my", shiftController.getMyShifts);
+// GET /api/shift - Get all shifts with optional filters
+router.get("/", authenticate, getAllShifts);
 
-// Manager/Admin endpoints - you can protect with checkRole middleware
-router.get("/branch", checkRole([UserRole.MANAGER, UserRole.ADMIN]), shiftController.getBranchShifts);
-router.get("/active", checkRole([UserRole.MANAGER, UserRole.ADMIN]), shiftController.getActiveShifts);
-router.get("/report", checkRole([UserRole.MANAGER, UserRole.ADMIN]), shiftController.getReport);
+// GET /api/shift/active - Get all active shifts
+router.get("/active", authenticate, getActiveShifts);
 
-// Additional utility endpoints
-router.get("/:id", shiftController.getShiftById);
-router.put("/:id", checkRole([UserRole.ADMIN]), shiftController.updateShift);
-router.delete("/:id", checkRole([UserRole.ADMIN]), shiftController.deleteShift);
+// GET /api/shift/stats - Get shift statistics
+router.get("/stats", authenticate, getShiftStats);
 
-// User-specific endpoints
-router.get("/user/:userId", shiftController.getUserShifts);
-router.get("/active-status", shiftController.getActiveShiftStatus);
+// GET /api/shift/users - Get users available for shift assignment
+router.get("/users", authenticate, getUsersForShiftAssignment);
 
-// Statistics endpoint (Manager/Admin only)
-router.get("/stats", checkRole([UserRole.MANAGER, UserRole.ADMIN]), shiftController.getShiftStats);
+// GET /api/shift/branches - Get branches for shift management
+router.get("/branches", authenticate, getBranchesForShift);
+
+// GET /api/shift/:id - Get specific shift by ID
+router.get("/:id", authenticate, getShiftById);
+
+// GET /api/shift/user/:userId - Get shifts for a specific user
+router.get("/user/:userId", authenticate, getUserShifts);
+
+// POST /api/shift - Create new shift
+router.post("/", authenticate, createShift);
+
+// PUT /api/shift/:id - Update shift
+router.put("/:id", authenticate, updateShift);
+
+// PUT /api/shift/:id/end - End a shift
+router.put("/:id/end", authenticate, endShift);
+
+// DELETE /api/shift/:id - Delete shift
+router.delete("/:id", authenticate, deleteShift);
 
 export default router;

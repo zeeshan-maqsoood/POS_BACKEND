@@ -74,11 +74,12 @@ enum Permission {
   PURCHASE_ORDER_UPDATE
   PURCHASE_ORDER_DELETE
 
-  // Inventory permissions
-  INVENTORY_CREATE
-  INVENTORY_READ
-  INVENTORY_UPDATE
-  INVENTORY_DELETE
+  // Shift permissions
+  SHIFT_CREATE
+  SHIFT_READ
+  SHIFT_UPDATE
+  SHIFT_DELETE
+  SHIFT_MANAGE
 }
 
 enum OrderStatus {
@@ -202,7 +203,6 @@ model User {
   email        String          @unique
   password     String
   name         String?
-  branch       String?         // Static branch name (e.g., "Downtown", "Uptown", "City Center")
   role         UserRole        @default(CUSTOMER)
   status       UserStatus      @default(ACTIVE)
   createdBy    User?           @relation("CreatedUsers", fields: [createdById], references: [id])
@@ -227,7 +227,48 @@ model User {
   supplierEvaluations   SupplierEvaluation[]
   InventoryTransaction  InventoryTransaction[]
 
+  branch                Branch?         @relation(fields: [branchId], references: [id])
+  branchId              String?
+
   Shift Shift[]
+}
+
+model Branch {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  restaurantName  String   // Restaurant name (e.g., "Downtown Restaurant")
+  description     String?
+  address         String?
+  city            String?
+  state           String?
+  country         String   @default("US")
+  postalCode      String?
+  phone           String?
+  email           String?
+  manager         String?  // Manager name
+  isActive        Boolean  @default(true)
+
+  // Operating hours (JSON format for flexibility)
+  operatingHours  Json?    // { monday: { open: "09:00", close: "22:00" }, ... }
+
+  // Relationships
+  users           User[]
+  shifts          Shift[]
+  menuCategories  MenuCategory[]
+  menuItems       MenuItem[]
+  orders          Order[]
+  purchaseOrders  PurchaseOrder[]
+  goodsReceipts   GoodsReceipt[]
+  inventoryCategories InventoryCategory[]
+  inventoryItems  InventoryItem[]
+  inventoryTransactions InventoryTransaction[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+  InventorySubcategory InventorySubcategory[]
 }
 
 model UserPermission {
@@ -241,7 +282,8 @@ model Shift {
   id         String      @id @default(uuid())
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     String
-  branchName String?     // match the rest of your schema (branchName)
+  branch     Branch?     @relation(fields: [branchId], references: [id])
+  branchId   String?
   startTime  DateTime
   endTime    DateTime?
   totalHours Float?
@@ -250,7 +292,7 @@ model Shift {
   updatedAt  DateTime    @updatedAt
 
   @@index([userId])
-  @@index([branchName])
+  @@index([branchId])
   @@index([status])
 }
 /* ===================== SUPPLIER MODELS ===================== */
@@ -373,7 +415,6 @@ model PurchaseOrder {
   poNumber        String                 @unique // Purchase Order Number (e.g., PO-2024-001)
   supplier        Supplier               @relation(fields: [supplierId], references: [id])
   supplierId      String
-  branchName      String?
   
   // Order Details
   status          PurchaseOrderStatus    @default(DRAFT)
@@ -401,6 +442,8 @@ model PurchaseOrder {
   approvals       PurchaseOrderApproval[]
   goodsReceipts   GoodsReceipt[]
   invoices        SupplierInvoice[]
+  branch          Branch?                @relation(fields: [branchId], references: [id])
+  branchId        String?
   
   // Audit
   createdBy       User                   @relation(fields: [createdById], references: [id])
@@ -411,7 +454,7 @@ model PurchaseOrder {
   @@index([supplierId])
   @@index([status])
   @@index([orderDate])
-  @@index([branchName])
+  @@index([branchId])
   @@index([createdById])
 }
 
@@ -463,7 +506,6 @@ model GoodsReceipt {
   grNumber        String          @unique // Goods Receipt Number (e.g., GR-2024-001)
   purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
   purchaseOrderId String
-  branchName      String?
   
   // Receipt Details
   status          ReceivingStatus @default(PENDING)
@@ -477,6 +519,8 @@ model GoodsReceipt {
   // Relationships
   items           GoodsReceiptItem[]
   inventoryTransactions InventoryTransaction[]
+  branch          Branch?         @relation(fields: [branchId], references: [id])
+  branchId        String?
   
   // Audit
   createdAt       DateTime        @default(now())
@@ -485,7 +529,7 @@ model GoodsReceipt {
   
   @@index([purchaseOrderId])
   @@index([receiptDate])
-  @@index([branchName])
+  @@index([branchId])
   @@index([receivedById])
 }
 
@@ -628,10 +672,12 @@ model MenuCategory {
   imageUrl    String?
   isActive    Boolean     @default(true)
   menuItems   MenuItem[]
-  branchName  String?
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+  branchId    String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
-  @@index([branchName])
+
+  @@index([branchId])
 }
 
 model MenuItem {
@@ -650,10 +696,12 @@ model MenuItem {
   tags          String[]
   modifiers     MenuItemModifier[]
   menuItemIngredients MenuItemIngredient[]
-  branchName    String?
+  branch        Branch?          @relation(fields: [branchId], references: [id])
+  branchId      String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
-  @@index([branchName])
+
+  @@index([branchId])
 }
 
 model MenuItemIngredient {
@@ -686,13 +734,16 @@ model Order {
   customerEmail  String?
   customerPhone  String?
   notes          String?
-  branchName     String?
   items          OrderItem[]
   payments       Payment[]
   createdBy      User?          @relation("CreatedOrders", fields: [createdById], references: [id])
   createdById    String?
+  branch         Branch?        @relation(fields: [branchId], references: [id])
+  branchId       String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+
+  @@index([branchId])
 }
 
 model OrderItem {
@@ -752,7 +803,6 @@ model InventoryTransaction {
   reason          String
   referenceId     String?  // Order ID, Purchase Order ID, etc.
   referenceType   String?  // ORDER, PURCHASE_ORDER, ADJUSTMENT, etc.
-  branchName      String?
   previousQuantity Float
   newQuantity     Float
   createdAt       DateTime @default(now())
@@ -763,11 +813,14 @@ model InventoryTransaction {
   createdBy     User?         @relation(fields: [createdById], references: [id])
   goodsReceipt  GoodsReceipt? @relation(fields: [goodsReceiptId], references: [id])
   goodsReceiptId String?
+  branch        Branch?       @relation(fields: [branchId], references: [id])
+  branchId      String?
 
   @@index([inventoryItemId])
   @@index([referenceId, referenceType])
   @@index([createdAt])
   @@index([goodsReceiptId])
+  @@index([branchId])
 }
 
 enum TransactionType {
@@ -807,14 +860,15 @@ model InventoryCategory {
   description String?
   color       String               @default("bg-gray-500")
   isActive    Boolean              @default(true)
-  branchName  String?
   subcategories InventorySubcategory[]
   items       InventoryItem[]
+  branch      Branch?              @relation(fields: [branchId], references: [id])
+  branchId    String?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
-  
-  @@index([branchName])
-  @@unique([name, branchName])
+
+  @@index([branchId])
+  @@unique([name, branchId])
 }
 
 model InventorySubcategory {
@@ -824,14 +878,15 @@ model InventorySubcategory {
   categoryId  String
   category    InventoryCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   isActive    Boolean              @default(true)
-  branchName  String?
   items       InventoryItem[]
+  branch      Branch?              @relation(fields: [branchId], references: [id])
+  branchId    String?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
-  
-  @@index([branchName])
+
+  @@index([branchId])
   @@index([categoryId])
-  @@unique([name, categoryId, branchName])
+  @@unique([name, categoryId, branchId])
 }
 
 model InventoryItem {
@@ -850,7 +905,6 @@ model InventoryItem {
   supplier       String               // Primary supplier (legacy field, use SupplierProduct for detailed info)
   location       String
   status         InventoryStatus
-  branchName     String?
   expiryDate     DateTime?
   lastUpdated    DateTime             @default(now())
   createdAt      DateTime             @default(now())
@@ -861,8 +915,10 @@ model InventoryItem {
   MenuItemIngredient MenuItemIngredient[]
   ModifierIngredient ModifierIngredient[]
   InventoryTransaction InventoryTransaction[]
+  branch         Branch?              @relation(fields: [branchId], references: [id])
+  branchId       String?
   
-  @@index([branchName])
+  @@index([branchId])
   @@index([categoryId])
   @@index([subcategoryId])
   @@index([status])
