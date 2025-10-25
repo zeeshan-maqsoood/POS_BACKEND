@@ -8,10 +8,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* ===================== ENUMS ===================== */
+/**
+ * ===================== ENUMS =====================
+ */
 
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
+  RESTAURANT
   MANAGER
   CASHIER
   WAITER
@@ -32,12 +36,12 @@ enum Permission {
   USER_READ
   USER_UPDATE
   USER_DELETE
-  
+
   // Manager permissions
   MANAGER_CREATE
   MANAGER_READ
   MANAGER_UPDATE
-  
+
   // Order permissions
   ORDER_CREATE
   ORDER_READ
@@ -49,13 +53,13 @@ enum Permission {
   POS_READ
   POS_UPDATE
   POS_DELETE
-  
+
   // Product permissions
   PRODUCT_CREATE
   PRODUCT_READ
   PRODUCT_UPDATE
   PRODUCT_DELETE
-  
+
   // Menu permissions
   MENU_CREATE
   MENU_READ
@@ -74,16 +78,17 @@ enum Permission {
   PURCHASE_ORDER_UPDATE
   PURCHASE_ORDER_DELETE
 
-  // Shift permissions
-  SHIFT_CREATE
-  SHIFT_READ
-  SHIFT_UPDATE
-  SHIFT_DELETE
-  SHIFT_MANAGE
+  // Restaurant permissions
+  RESTAURANT_CREATE
+  RESTAURANT_READ
+  RESTAURANT_UPDATE
+  RESTAURANT_DELETE
+  RESTAURANT_BRANCH_MANAGE
 }
 
 enum OrderStatus {
   PENDING
+  PROCESSING
   CONFIRMED
   PREPARING
   READY_FOR_PICKUP
@@ -183,101 +188,146 @@ enum DeliveryMethod {
   THIRD_PARTY
 }
 
-enum DayOfWeek {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
-}
 enum ShiftStatus {
   ACTIVE
   ENDED
 }
-/* ===================== MODELS ===================== */
+
+enum ServiceType {
+  DINE_IN
+  TAKE_AWAY
+  BOTH
+}
+
+/**
+ * ===================== MODELS =====================
+ */
 
 model User {
-  id           String          @id @default(uuid())
-  email        String          @unique
-  password     String
-  name         String?
-  role         UserRole        @default(CUSTOMER)
-  status       UserStatus      @default(ACTIVE)
-  createdBy    User?           @relation("CreatedUsers", fields: [createdById], references: [id])
-  createdById  String?
-  
-  // Shift Management (for managers and staff)
-  shiftSchedule    Json?           // { MONDAY: { startTime: "09:00", endTime: "17:00" }, TUESDAY: { startTime: "10:00", endTime: "18:00" }, ... }
-  isShiftActive    Boolean         @default(true)
-  
-  createdUsers User[]          @relation("CreatedUsers")
-  orders       Order[]         @relation("CreatedOrders")
-  permissions  UserPermission[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  
-  // Supplier relationships
-  createdSuppliers      Supplier[]
-  purchaseOrders        PurchaseOrder[]
-  purchaseOrderApprovals PurchaseOrderApproval[]
-  goodsReceipts         GoodsReceipt[]
-  supplierPayments      SupplierPayment[]
-  supplierEvaluations   SupplierEvaluation[]
-  InventoryTransaction  InventoryTransaction[]
+  id          String     @id @default(uuid())
+  email       String     @unique
+  password    String
+  name        String?
+  role        UserRole   @default(CUSTOMER)
+  status      UserStatus @default(ACTIVE)
+  createdBy   User?      @relation("CreatedUsers", fields: [createdById], references: [id])
+  createdById String?
 
-  branch                Branch?         @relation(fields: [branchId], references: [id])
-  branchId              String?
+  // Shift Management (for managers and staff)
+  shiftSchedule Json? // { MONDAY: { startTime: "09:00", endTime: "17:00" }, TUESDAY: { startTime: "10:00", endTime: "18:00" }, ... }
+  isShiftActive Boolean @default(true)
+
+  createdUsers User[]           @relation("CreatedUsers")
+  orders       Order[]          @relation("CreatedOrders")
+  permissions  UserPermission[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Supplier relationships
+  createdSuppliers       Supplier[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseOrderApprovals PurchaseOrderApproval[]
+  goodsReceipts          GoodsReceipt[]
+  supplierPayments       SupplierPayment[]
+  supplierEvaluations    SupplierEvaluation[]
+  InventoryTransaction   InventoryTransaction[]
+
+  branch   Branch? @relation(fields: [branchId], references: [id])
+  branchId String?
+
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  restaurantId String?
 
   Shift Shift[]
 }
 
 model Branch {
-  id              String   @id @default(uuid())
-  name            String   @unique
-  restaurantName  String   // Restaurant name (e.g., "Downtown Restaurant")
-  description     String?
-  address         String?
-  city            String?
-  state           String?
-  country         String   @default("US")
-  postalCode      String?
-  phone           String?
-  email           String?
-  manager         String?  // Manager name
-  isActive        Boolean  @default(true)
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  address     String?
+  city        String?
+  state       String?
+  country     String  @default("US")
+  postalCode  String?
+  phone       String?
+  email       String?
+  manager     String? // Manager name
+  isActive    Boolean @default(true)
+  serviceType ServiceType @default(BOTH) // DINE_IN, TAKE_AWAY, or BOTH
 
   // Operating hours (JSON format for flexibility)
-  operatingHours  Json?    // { monday: { open: "09:00", close: "22:00" }, ... }
+  operatingHours Json? // { monday: { open: "09:00", close: "22:00" }, ... }
 
   // Relationships
-  users           User[]
-  shifts          Shift[]
-  menuCategories  MenuCategory[]
-  menuItems       MenuItem[]
-  orders          Order[]
-  purchaseOrders  PurchaseOrder[]
-  goodsReceipts   GoodsReceipt[]
-  inventoryCategories InventoryCategory[]
-  inventoryItems  InventoryItem[]
-  inventoryTransactions InventoryTransaction[]
+  restaurant             Restaurant?            @relation(fields: [restaurantId], references: [id])
+  restaurantId           String?
+  users                  User[]
+  shifts                 Shift[]
+  menuCategories         MenuCategory[]
+  menuItems              MenuItem[]
+  orders                 Order[]
+  purchaseOrders         PurchaseOrder[]
+  goodsReceipts          GoodsReceipt[]
+  inventoryCategories    InventoryCategory[]
+  inventoryItems         InventoryItem[]
+  inventorySubcategories InventorySubcategory[]
+  inventoryTransactions  InventoryTransaction[]
+  modifiers              Modifier[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+} 
+
+model Restaurant {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  address     String?
+  city        String?
+  state       String?
+  country     String  @default("US")
+  postalCode  String?
+  phone       String?
+  email       String?
+  website     String?
+  logoUrl     String? // Logo image URL
+  isActive    Boolean @default(true)
+
+  // Operating hours (JSON format for flexibility)
+  operatingHours Json? // { monday: { open: "09:00", close: "22:00" }, ... }
+
+  // Business Information
+  businessType    String? // Restaurant type (Fast Food, Fine Dining, etc.)
+  cuisine         String[] // Array of cuisine types
+  establishedYear Int?
+
+  // Relationships
+  branches               Branch[]
+  users                  User[]
+  menuCategories         MenuCategory[]
+  menuItems              MenuItem[]
+  modifiers              Modifier[]
+  inventoryCategories    InventoryCategory[]
+  inventorySubcategories InventorySubcategory[]
+  inventoryItems         InventoryItem[]
+  orders                 Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([name])
   @@index([isActive])
-  InventorySubcategory InventorySubcategory[]
 }
 
 model UserPermission {
-  id          String      @id @default(uuid())
-  user        User        @relation(fields: [userId], references: [id])
-  userId      String
-  permission  Permission
-  createdAt   DateTime    @default(now())
+  id         String     @id @default(uuid())
+  user       User       @relation(fields: [userId], references: [id])
+  userId     String
+  permission Permission
+  createdAt  DateTime   @default(now())
 }
+
 model Shift {
   id         String      @id @default(uuid())
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -293,65 +343,67 @@ model Shift {
 
   @@index([userId])
   @@index([branchId])
-  @@index([status])
 }
-/* ===================== SUPPLIER MODELS ===================== */
+
+/**
+ * ===================== SUPPLIER MODELS =====================
+ */
 
 model Supplier {
-  id              String           @id @default(uuid())
-  code            String           @unique // Supplier code (e.g., SUP001)
-  name            String
-  legalName       String?          // Legal business name
-  description     String?
-  taxNumber       String?          // Tax ID/VAT number
-  registrationNumber String?       // Business registration number
-  
+  id                 String  @id @default(uuid())
+  code               String  @unique // Supplier code (e.g., SUP001)
+  name               String
+  legalName          String? // Legal business name
+  description        String?
+  taxNumber          String? // Tax ID/VAT number
+  registrationNumber String? // Business registration number
+
   // Contact Information
-  email           String?
-  phone           String?
-  mobile          String?
-  website         String?
-  
+  email   String?
+  phone   String?
+  mobile  String?
+  website String?
+
   // Address Information
-  address         String?
-  city            String?
-  state           String?
-  country         String          @default("US")
-  postalCode      String?
-  
+  address    String?
+  city       String?
+  state      String?
+  country    String  @default("US")
+  postalCode String?
+
   // Business Information
-  businessType    String?         // Manufacturer, Distributor, Wholesaler, etc.
-  industry        String?         // Food & Beverage, Packaging, etc.
+  businessType    String? // Manufacturer, Distributor, Wholesaler, etc.
+  industry        String? // Food & Beverage, Packaging, etc.
   establishedYear Int?
   employeeCount   Int?
-  
+
   // Status & Rating
-  status          SupplierStatus  @default(ACTIVE)
-  rating          SupplierRating? @default(AVERAGE)
-  creditLimit     Float?          // Maximum credit limit
-  paymentTerms    PaymentTerm     @default(NET_30)
-  
+  status       SupplierStatus  @default(ACTIVE)
+  rating       SupplierRating? @default(AVERAGE)
+  creditLimit  Float? // Maximum credit limit
+  paymentTerms PaymentTerm     @default(NET_30)
+
   // Financial Information
-  bankName        String?
-  bankAccount     String?
-  bankRouting     String?
-  currency        String          @default("USD")
-  
+  bankName    String?
+  bankAccount String?
+  bankRouting String?
+  currency    String  @default("USD")
+
   // Relationships
-  contacts        SupplierContact[]
-  products        SupplierProduct[]
-  purchaseOrders  PurchaseOrder[]
-  invoices        SupplierInvoice[]
-  payments        SupplierPayment[]
-  evaluations     SupplierEvaluation[]
-  
+  contacts       SupplierContact[]
+  products       SupplierProduct[]
+  purchaseOrders PurchaseOrder[]
+  invoices       SupplierInvoice[]
+  payments       SupplierPayment[]
+  evaluations    SupplierEvaluation[]
+
   // Audit
-  createdBy       User            @relation(fields: [createdById], references: [id])
-  createdById     String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  notes           String?
-  
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  notes       String?
+
   @@index([name])
   @@index([status])
   @@index([rating])
@@ -359,98 +411,98 @@ model Supplier {
 }
 
 model SupplierContact {
-  id           String        @id @default(uuid())
-  supplier     Supplier      @relation(fields: [supplierId], references: [id])
-  supplierId   String
-  name         String
-  position     String?       // Job title/position
-  email        String?
-  phone        String?
-  mobile       String?
-  isPrimary    Boolean       @default(false)
-  department   String?       // Sales, Support, Accounting, etc.
-  notes        String?
-  
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  
+  id         String   @id @default(uuid())
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplierId String
+  name       String
+  position   String? // Job title/position
+  email      String?
+  phone      String?
+  mobile     String?
+  isPrimary  Boolean  @default(false)
+  department String? // Sales, Support, Accounting, etc.
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([supplierId])
   @@index([isPrimary])
 }
 
 model SupplierProduct {
-  id               String          @id @default(uuid())
-  supplier         Supplier        @relation(fields: [supplierId], references: [id])
-  supplierId       String
-  inventoryItem    InventoryItem   @relation(fields: [inventoryItemId], references: [id])
-  inventoryItemId  String
-  
+  id              String        @id @default(uuid())
+  supplier        Supplier      @relation(fields: [supplierId], references: [id])
+  supplierId      String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  inventoryItemId String
+
   // Supplier-specific product information
-  supplierCode     String?         // Supplier's product code/SKU
-  supplierName     String?         // Supplier's product name (if different)
-  unitPrice        Float           // Current price from this supplier
-  minOrderQuantity Float?          // Minimum order quantity
-  packSize         String?         // Packaging size/unit
-  leadTime         Int?            // Lead time in days
-  isActive         Boolean         @default(true)
-  
+  supplierCode     String? // Supplier's product code/SKU
+  supplierName     String? // Supplier's product name (if different)
+  unitPrice        Float // Current price from this supplier
+  minOrderQuantity Float? // Minimum order quantity
+  packSize         String? // Packaging size/unit
+  leadTime         Int? // Lead time in days
+  isActive         Boolean @default(true)
+
   // Price history and negotiations
   previousPrice    Float?
   priceLastUpdated DateTime?
   notes            String?
-  
+
   // Audit
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  PurchaseOrderItem PurchaseOrderItem[]
+
   @@unique([supplierId, inventoryItemId])
   @@index([supplierId])
   @@index([inventoryItemId])
   @@index([isActive])
-  PurchaseOrderItem PurchaseOrderItem[]
 }
 
 model PurchaseOrder {
-  id              String                 @id @default(uuid())
-  poNumber        String                 @unique // Purchase Order Number (e.g., PO-2024-001)
-  supplier        Supplier               @relation(fields: [supplierId], references: [id])
-  supplierId      String
-  
+  id         String   @id @default(uuid())
+  poNumber   String   @unique // Purchase Order Number (e.g., PO-2024-001)
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplierId String
+
   // Order Details
-  status          PurchaseOrderStatus    @default(DRAFT)
-  orderDate       DateTime               @default(now())
-  expectedDate    DateTime?              // Expected delivery date
-  deliveryDate    DateTime?              // Actual delivery date
-  deliveryMethod  DeliveryMethod?        @default(SUPPLIER_DELIVERY)
+  status          PurchaseOrderStatus @default(DRAFT)
+  orderDate       DateTime            @default(now())
+  expectedDate    DateTime? // Expected delivery date
+  deliveryDate    DateTime? // Actual delivery date
+  deliveryMethod  DeliveryMethod?     @default(SUPPLIER_DELIVERY)
   shippingAddress String?
-  
+
   // Financial Information
-  subtotal        Float                  @default(0)
-  taxRate         Float                  @default(0)
-  taxAmount       Float                  @default(0)
-  shippingCost    Float                  @default(0)
-  discount        Float                  @default(0)
-  totalAmount     Float                  @default(0)
-  
+  subtotal     Float @default(0)
+  taxRate      Float @default(0)
+  taxAmount    Float @default(0)
+  shippingCost Float @default(0)
+  discount     Float @default(0)
+  totalAmount  Float @default(0)
+
   // Terms & Conditions
-  paymentTerms    PaymentTerm            @default(NET_30)
+  paymentTerms    PaymentTerm @default(NET_30)
   notes           String?
-  termsConditions String?                // Custom terms and conditions
-  
+  termsConditions String? // Custom terms and conditions
+
   // Relationships
-  items           PurchaseOrderItem[]
-  approvals       PurchaseOrderApproval[]
-  goodsReceipts   GoodsReceipt[]
-  invoices        SupplierInvoice[]
-  branch          Branch?                @relation(fields: [branchId], references: [id])
-  branchId        String?
-  
+  items         PurchaseOrderItem[]
+  approvals     PurchaseOrderApproval[]
+  goodsReceipts GoodsReceipt[]
+  invoices      SupplierInvoice[]
+  branch        Branch?                 @relation(fields: [branchId], references: [id])
+  branchId      String?
+
   // Audit
-  createdBy       User                   @relation(fields: [createdById], references: [id])
-  createdById     String
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   @@index([supplierId])
   @@index([status])
   @@index([orderDate])
@@ -459,74 +511,74 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id               String                  @id @default(uuid())
-  purchaseOrder    PurchaseOrder           @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  purchaseOrderId  String
-  supplierProduct  SupplierProduct         @relation(fields: [supplierProductId], references: [id])
+  id                String          @id @default(uuid())
+  purchaseOrder     PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrderId   String
+  supplierProduct   SupplierProduct @relation(fields: [supplierProductId], references: [id])
   supplierProductId String
-  
+
   // Order Details
   quantity         Float
   unitPrice        Float
   receivedQuantity Float                   @default(0)
   status           PurchaseOrderItemStatus @default(PENDING)
-  
+
   // Calculations
-  lineTotal        Float                   @default(0) // quantity * unitPrice
-  
+  lineTotal Float @default(0) // quantity * unitPrice
+
   // Additional Information
-  expectedDate     DateTime?               // Item-specific expected date
-  notes            String?
-  
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
-  
+  expectedDate DateTime? // Item-specific expected date
+  notes        String?
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  GoodsReceiptItem GoodsReceiptItem[]
+
   @@index([purchaseOrderId])
   @@index([supplierProductId])
   @@index([status])
-  GoodsReceiptItem GoodsReceiptItem[]
 }
 
 model PurchaseOrderApproval {
-  id              String            @id @default(uuid())
-  purchaseOrder   PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id])
+  id              String              @id @default(uuid())
+  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
   purchaseOrderId String
-  approvedBy      User              @relation(fields: [approvedById], references: [id])
+  approvedBy      User                @relation(fields: [approvedById], references: [id])
   approvedById    String
   status          PurchaseOrderStatus
   comments        String?
-  approvedAt      DateTime          @default(now())
-  
+  approvedAt      DateTime            @default(now())
+
   @@index([purchaseOrderId])
   @@index([approvedById])
 }
 
 model GoodsReceipt {
-  id              String          @id @default(uuid())
-  grNumber        String          @unique // Goods Receipt Number (e.g., GR-2024-001)
-  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
+  id              String        @id @default(uuid())
+  grNumber        String        @unique // Goods Receipt Number (e.g., GR-2024-001)
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
   purchaseOrderId String
-  
+
   // Receipt Details
-  status          ReceivingStatus @default(PENDING)
-  receiptDate     DateTime        @default(now())
-  receivedBy      User            @relation(fields: [receivedById], references: [id])
-  receivedById    String
-  inspectedBy     String?         // Name of person who inspected
-  deliveryNote    String?         // Supplier's delivery note number
-  vehicleNumber   String?         // Delivery vehicle number
-  
+  status        ReceivingStatus @default(PENDING)
+  receiptDate   DateTime        @default(now())
+  receivedBy    User            @relation(fields: [receivedById], references: [id])
+  receivedById  String
+  inspectedBy   String? // Name of person who inspected
+  deliveryNote  String? // Supplier's delivery note number
+  vehicleNumber String? // Delivery vehicle number
+
   // Relationships
-  items           GoodsReceiptItem[]
+  items                 GoodsReceiptItem[]
   inventoryTransactions InventoryTransaction[]
-  branch          Branch?         @relation(fields: [branchId], references: [id])
-  branchId        String?
-  
+  branch                Branch?                @relation(fields: [branchId], references: [id])
+  branchId              String?
+
   // Audit
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  notes           String?
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  notes     String?
+
   @@index([purchaseOrderId])
   @@index([receiptDate])
   @@index([branchId])
@@ -534,71 +586,71 @@ model GoodsReceipt {
 }
 
 model GoodsReceiptItem {
-  id                  String              @id @default(uuid())
-  goodsReceipt        GoodsReceipt        @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  id                  String            @id @default(uuid())
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
   goodsReceiptId      String
-  purchaseOrderItem   PurchaseOrderItem   @relation(fields: [purchaseOrderItemId], references: [id])
+  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
   purchaseOrderItemId String
-  
+
   // Receipt Details
-  quantityOrdered     Float
-  quantityReceived    Float
-  unitPrice           Float
-  batchNumber         String?           // Lot/Batch number
-  expiryDate          DateTime?         // Expiry date for perishable items
-  storageLocation     String?           // Where to store the received items
-  
+  quantityOrdered  Float
+  quantityReceived Float
+  unitPrice        Float
+  batchNumber      String? // Lot/Batch number
+  expiryDate       DateTime? // Expiry date for perishable items
+  storageLocation  String? // Where to store the received items
+
   // Quality Control
-  qualityStatus       String?           // PASSED, FAILED, etc.
-  qualityNotes        String?
-  
+  qualityStatus String? // PASSED, FAILED, etc.
+  qualityNotes  String?
+
   // Calculations
-  lineTotal           Float             // quantityReceived * unitPrice
-  
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  
+  lineTotal Float // quantityReceived * unitPrice
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([goodsReceiptId])
   @@index([purchaseOrderItemId])
 }
 
 model SupplierInvoice {
-  id              String          @id @default(uuid())
-  invoiceNumber   String          @unique // Supplier's invoice number
-  supplier        Supplier        @relation(fields: [supplierId], references: [id])
+  id              String         @id @default(uuid())
+  invoiceNumber   String         @unique // Supplier's invoice number
+  supplier        Supplier       @relation(fields: [supplierId], references: [id])
   supplierId      String
-  purchaseOrder   PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   purchaseOrderId String?
-  
+
   // Invoice Details
-  status          InvoiceStatus   @default(DRAFT)
-  issueDate       DateTime
-  dueDate         DateTime
-  invoiceDate     DateTime        @default(now())
-  
+  status      InvoiceStatus @default(DRAFT)
+  issueDate   DateTime
+  dueDate     DateTime
+  invoiceDate DateTime      @default(now())
+
   // Financial Information
-  subtotal        Float           @default(0)
-  taxAmount       Float           @default(0)
-  shippingCost    Float           @default(0)
-  discount        Float           @default(0)
-  totalAmount     Float           @default(0)
-  amountPaid      Float           @default(0)
-  balanceDue      Float           @default(0)
-  
+  subtotal     Float @default(0)
+  taxAmount    Float @default(0)
+  shippingCost Float @default(0)
+  discount     Float @default(0)
+  totalAmount  Float @default(0)
+  amountPaid   Float @default(0)
+  balanceDue   Float @default(0)
+
   // Payment Information
-  paymentTerms    PaymentTerm     @default(NET_30)
-  
+  paymentTerms PaymentTerm @default(NET_30)
+
   // Relationships
-  payments        SupplierPayment[]
-  
+  payments SupplierPayment[]
+
   // Document Management
-  invoiceFile     String?         // Path to uploaded invoice file
-  notes           String?
-  
+  invoiceFile String? // Path to uploaded invoice file
+  notes       String?
+
   // Audit
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([supplierId])
   @@index([purchaseOrderId])
   @@index([status])
@@ -606,26 +658,26 @@ model SupplierInvoice {
 }
 
 model SupplierPayment {
-  id              String          @id @default(uuid())
-  paymentNumber   String          @unique // Internal payment number
-  supplier        Supplier        @relation(fields: [supplierId], references: [id])
-  supplierId      String
-  invoice         SupplierInvoice? @relation(fields: [invoiceId], references: [id])
-  invoiceId       String?
-  
+  id            String           @id @default(uuid())
+  paymentNumber String           @unique // Internal payment number
+  supplier      Supplier         @relation(fields: [supplierId], references: [id])
+  supplierId    String
+  invoice       SupplierInvoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId     String?
+
   // Payment Details
-  paymentDate     DateTime        @default(now())
+  paymentDate     DateTime      @default(now())
   paymentMethod   PaymentMethod
   amount          Float
-  referenceNumber String?         // Bank reference/transaction number
+  referenceNumber String? // Bank reference/transaction number
   notes           String?
-  
+
   // Audit
-  processedBy     User            @relation(fields: [processedById], references: [id])
-  processedById   String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
+  processedBy   User     @relation(fields: [processedById], references: [id])
+  processedById String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@index([supplierId])
   @@index([invoiceId])
   @@index([paymentDate])
@@ -633,194 +685,218 @@ model SupplierPayment {
 }
 
 model SupplierEvaluation {
-  id              String          @id @default(uuid())
-  supplier        Supplier        @relation(fields: [supplierId], references: [id])
-  supplierId      String
-  evaluationDate  DateTime        @default(now())
-  evaluatedBy     User            @relation(fields: [evaluatedById], references: [id])
-  evaluatedById   String
-  
+  id             String   @id @default(uuid())
+  supplier       Supplier @relation(fields: [supplierId], references: [id])
+  supplierId     String
+  evaluationDate DateTime @default(now())
+  evaluatedBy    User     @relation(fields: [evaluatedById], references: [id])
+  evaluatedById  String
+
   // Evaluation Criteria (1-5 scale)
-  qualityRating   Int             // 1-5
-  deliveryRating  Int             // 1-5
-  priceRating     Int             // 1-5
-  serviceRating   Int             // 1-5
-  communicationRating Int         // 1-5
-  
+  qualityRating       Int // 1-5
+  deliveryRating      Int // 1-5
+  priceRating         Int // 1-5
+  serviceRating       Int // 1-5
+  communicationRating Int // 1-5
+
   // Overall
-  overallRating   Float           // Average of all ratings
+  overallRating   Float // Average of all ratings
   comments        String?
   recommendations String?
-  
+
   // Status
-  isActive        Boolean         @default(true)
-  
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([supplierId])
   @@index([evaluationDate])
   @@index([evaluatedById])
 }
 
-/* ===================== EXISTING MODELS (with supplier relationships) ===================== */
+/**
+ * ===================== EXISTING MODELS (with supplier relationships) =====================
+ */
 
 model MenuCategory {
-  id          String      @id @default(uuid())
-  name        String
-  description String?
-  imageUrl    String?
-  isActive    Boolean     @default(true)
-  menuItems   MenuItem[]
-  branch      Branch?     @relation(fields: [branchId], references: [id])
-  branchId    String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  imageUrl     String?
+  isActive     Boolean     @default(true)
+  branchName   String? // Added to match database schema
+  restaurantId String? // Added to support restaurant assignment
+  menuItems    MenuItem[]
+  branch       Branch?     @relation(fields: [branchId], references: [id])
+  branchId     String?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@index([branchId])
+  @@index([branchName]) // Added index for branchName
+  @@index([restaurantId]) // Added index for restaurantId
 }
 
 model MenuItem {
-  id            String           @id @default(uuid())
-  name          String
-  description   String?
-  imageUrl      String?
-  price         Float
-  cost          Float?
-  taxRate       Float
-  taxExempt     Boolean          @default(false)
-  isActive      Boolean          @default(true)
-  categoryId    String
-  category      MenuCategory     @relation(fields: [categoryId], references: [id])
-  orderItems    OrderItem[]
-  tags          String[]
-  modifiers     MenuItemModifier[]
+  id                  String               @id @default(uuid())
+  name                String
+  description         String?
+  imageUrl            String?
+  price               Float
+  cost                Float?
+  taxRate             Float
+  taxExempt           Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  categoryId          String
+  category            MenuCategory         @relation(fields: [categoryId], references: [id])
+  orderItems          OrderItem[]
+  tags                String[]
+  modifiers           MenuItemModifier[]
   menuItemIngredients MenuItemIngredient[]
-  branch        Branch?          @relation(fields: [branchId], references: [id])
-  branchId      String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  branch              Branch?              @relation(fields: [branchId], references: [id])
+  branchId            String?
+  restaurant          Restaurant?          @relation(fields: [restaurantId], references: [id])
+  restaurantId        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([branchId])
+  @@index([restaurantId])
 }
 
 model MenuItemIngredient {
-  id               String          @id @default(uuid())
-  menuItemId       String
-  menuItem         MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  inventoryItemId  String
-  inventoryItem    InventoryItem   @relation(fields: [inventoryItemId], references: [id])
-  quantity         Float
-  unit             String
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id              String        @id @default(uuid())
+  menuItemId      String
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity        Float
+  unit            String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@unique([menuItemId, inventoryItemId])
 }
 
 model Order {
-  id             String         @id @default(uuid())
-  orderNumber    String         @unique
-  orderType      OrderType      @default(DINE_IN)
-  status         OrderStatus    @default(PENDING)
-  paymentStatus  PaymentStatus  @default(PENDING)
-  paymentMethod  PaymentMethod?
-  subtotal       Float
-  tax            Float
-  discount       Float?         @default(0)
-  total          Float
-  tableNumber    String?
-  customerName   String?
-  customerEmail  String?
-  customerPhone  String?
-  notes          String?
-  items          OrderItem[]
-  payments       Payment[]
-  createdBy      User?          @relation("CreatedOrders", fields: [createdById], references: [id])
-  createdById    String?
-  branch         Branch?        @relation(fields: [branchId], references: [id])
-  branchId       String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id            String         @id @default(uuid())
+  orderNumber   String         @unique
+  orderType     OrderType      @default(DINE_IN)
+  status        OrderStatus    @default(PENDING)
+  paymentStatus PaymentStatus  @default(PENDING)
+  paymentMethod PaymentMethod?
+  subtotal      Float
+  tax           Float
+  discount      Float?         @default(0)
+  total         Float
+  tableNumber   String?
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+  notes         String?
+  branchName    String?        // For filtering by branch name
+  items         OrderItem[]
+  payments      Payment[]
+  createdBy     User?          @relation("CreatedOrders", fields: [createdById], references: [id])
+  createdById   String?
+  branch        Branch?        @relation(fields: [branchId], references: [id])
+  branchId      String?
+  restaurant    Restaurant?    @relation(fields: [restaurantId], references: [id])
+  restaurantId  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([branchId])
+  @@index([branchName])
+  @@index([restaurantId])
 }
 
 model OrderItem {
-  id          String    @id @default(uuid())
-  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId     String
-  menuItemId  String?
-  name        String
-  quantity    Int
-  price       Float
-  taxRate     Float
-  tax         Float
-  total       Float
-  notes       String?
-  modifiers   Json?
-  menuItem    MenuItem? @relation(fields: [menuItemId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(uuid())
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
+  menuItemId String?
+  name       String
+  quantity   Int
+  price      Float
+  taxRate    Float
+  tax        Float
+  total      Float
+  notes      String?
+  modifiers  Json?
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model Payment {
-  id            String         @id @default(uuid())
-  order         Order          @relation(fields: [orderId], references: [id])
+  id            String        @id @default(uuid())
+  order         Order         @relation(fields: [orderId], references: [id])
   orderId       String
   method        PaymentMethod
   amount        Float
-  status        PaymentStatus  @default(PENDING)
+  status        PaymentStatus @default(PENDING)
   transactionId String?
-  createdAt     DateTime       @default(now())
+  createdAt     DateTime      @default(now())
 }
 
 model Modifier {
-  id          String        @id @default(uuid())
-  name        String
-  description String?
-  price       Float         @default(0)
-  isRequired  Boolean       @default(false)
-  isActive    Boolean       @default(true)
-  type        String        @default("SINGLE")
-  minSelection Int          @default(0)
-  maxSelection Int          @default(1)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  price        Float    @default(0)
+  isRequired   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  type         String   @default("SINGLE")
+  minSelection Int      @default(0)
+  maxSelection Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Multi-level hierarchy: Restaurant -> Branch -> Modifier
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  restaurantId String?
+  branch       Branch?     @relation(fields: [branchId], references: [id])
+  branchId     String?
+
   // Relationships
-  menuItems   MenuItemModifier[]
+  menuItems           MenuItemModifier[]
   modifierIngredients ModifierIngredient[]
-  
+
   @@map("modifiers")
 }
 
 model InventoryTransaction {
-  id              String   @id @default(cuid())
-  inventoryItemId String
-  type            TransactionType // INCOMING, OUTGOING, ADJUSTMENT
-  quantity        Float
-  reason          String
-  referenceId     String?  // Order ID, Purchase Order ID, etc.
-  referenceType   String?  // ORDER, PURCHASE_ORDER, ADJUSTMENT, etc.
+  id               String          @id @default(cuid())
+  inventoryItemId  String
+  type             TransactionType // INCOMING, OUTGOING, ADJUSTMENT
+  quantity         Float
+  reason           String
+  referenceId      String? // Order ID, Purchase Order ID, etc.
+  referenceType    String? // ORDER, PURCHASE_ORDER, ADJUSTMENT, etc.
   previousQuantity Float
-  newQuantity     Float
-  createdAt       DateTime @default(now())
-  createdById     String?
+  newQuantity      Float
+  branchName       String? // For filtering by branch name
+  createdAt        DateTime        @default(now())
+  createdById      String?
 
   // Relations
-  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  createdBy     User?         @relation(fields: [createdById], references: [id])
-  goodsReceipt  GoodsReceipt? @relation(fields: [goodsReceiptId], references: [id])
+  inventoryItem  InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  createdBy      User?         @relation(fields: [createdById], references: [id])
+  goodsReceipt   GoodsReceipt? @relation(fields: [goodsReceiptId], references: [id])
   goodsReceiptId String?
-  branch        Branch?       @relation(fields: [branchId], references: [id])
-  branchId      String?
+  branch         Branch?       @relation(fields: [branchId], references: [id])
+  branchId       String?
 
   @@index([inventoryItemId])
   @@index([referenceId, referenceType])
   @@index([createdAt])
   @@index([goodsReceiptId])
   @@index([branchId])
+  @@index([branchName])
 }
 
 enum TransactionType {
@@ -830,104 +906,124 @@ enum TransactionType {
 }
 
 model ModifierIngredient {
-  id            String    @id @default(uuid())
-  modifierId    String
-  modifier      Modifier  @relation(fields: [modifierId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid())
+  modifierId      String
+  modifier        Modifier      @relation(fields: [modifierId], references: [id], onDelete: Cascade)
   inventoryItemId String
-  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  quantity      Float
-  unit          String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity        Float
+  unit            String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@unique([modifierId, inventoryItemId])
 }
 
 model ModifierOption {
-  id          String    @id @default(uuid())
-  name        String
-  price       Float     @default(0)
-  isDefault   Boolean   @default(false)
-  isActive    Boolean   @default(true)
-  modifierId  String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  price      Float    @default(0)
+  isDefault  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  modifierId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model InventoryCategory {
-  id          String               @id @default(uuid())
-  name        String
-  description String?
-  color       String               @default("bg-gray-500")
-  isActive    Boolean              @default(true)
+  id            String                 @id @default(uuid())
+  name          String
+  description   String?
+  color         String                 @default("bg-gray-500")
+  isActive      Boolean                @default(true)
+  branchName    String? // For filtering by branch name
   subcategories InventorySubcategory[]
-  items       InventoryItem[]
-  branch      Branch?              @relation(fields: [branchId], references: [id])
-  branchId    String?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  items         InventoryItem[]
+  branch        Branch?                @relation(fields: [branchId], references: [id])
+  branchId      String?
+  restaurant    Restaurant?            @relation(fields: [restaurantId], references: [id])
+  restaurantId  String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
-  @@index([branchId])
   @@unique([name, branchId])
+  @@index([branchId])
+  @@index([restaurantId])
+  @@index([branchName])
 }
 
 model InventorySubcategory {
-  id          String               @id @default(uuid())
-  name        String
-  description String?
-  categoryId  String
-  category    InventoryCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  isActive    Boolean              @default(true)
-  items       InventoryItem[]
-  branch      Branch?              @relation(fields: [branchId], references: [id])
-  branchId    String?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id           String            @id @default(uuid())
+  name         String
+  description  String?
+  categoryId   String
+  category     InventoryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isActive     Boolean           @default(true)
+  branchName   String? // For filtering by branch name
+  items        InventoryItem[]
+  branch       Branch?           @relation(fields: [branchId], references: [id])
+  branchId     String?
+  restaurant   Restaurant?       @relation(fields: [restaurantId], references: [id])
+  restaurantId String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
-  @@index([branchId])
-  @@index([categoryId])
   @@unique([name, categoryId, branchId])
+  @@index([branchId])
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@index([branchName])
 }
 
 model InventoryItem {
-  id             String               @id @default(uuid())
-  name           String
-  description    String?
-  categoryId     String
-  category       InventoryCategory    @relation(fields: [categoryId], references: [id])
-  subcategoryId  String?
-  subcategory    InventorySubcategory? @relation(fields: [subcategoryId], references: [id])
-  quantity       Float
-  unit           String
-  cost           Float                // Keep cost for inventory valuation
-  minStock       Float
-  maxStock       Float
-  supplier       String               // Primary supplier (legacy field, use SupplierProduct for detailed info)
-  location       String
-  status         InventoryStatus
-  expiryDate     DateTime?
-  lastUpdated    DateTime             @default(now())
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  
+  id            String                @id @default(uuid())
+  name          String
+  description   String?
+  categoryId    String
+  category      InventoryCategory     @relation(fields: [categoryId], references: [id])
+  subcategoryId String?
+  subcategory   InventorySubcategory? @relation(fields: [subcategoryId], references: [id])
+  quantity      Float
+  unit          String
+  cost          Float // Keep cost for inventory valuation
+  minStock      Float
+  maxStock      Float
+  supplier      String // Primary supplier (legacy field, use SupplierProduct for detailed info)
+  location      String
+  status        InventoryStatus
+  branchName    String? // For filtering by branch name
+  expiryDate    DateTime?
+  lastUpdated   DateTime              @default(now())
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
   // Relationships
-  supplierProducts SupplierProduct[]
-  MenuItemIngredient MenuItemIngredient[]
-  ModifierIngredient ModifierIngredient[]
+  supplierProducts     SupplierProduct[]
+  MenuItemIngredient   MenuItemIngredient[]
+  ModifierIngredient   ModifierIngredient[]
   InventoryTransaction InventoryTransaction[]
-  branch         Branch?              @relation(fields: [branchId], references: [id])
-  branchId       String?
-  
+  branch               Branch?                @relation(fields: [branchId], references: [id])
+  branchId             String?
+  restaurant           Restaurant?            @relation(fields: [restaurantId], references: [id])
+  restaurantId         String?
+
   @@index([branchId])
+  @@index([restaurantId])
   @@index([categoryId])
   @@index([subcategoryId])
   @@index([status])
+  @@index([branchName])
 }
 
 model MenuItemModifier {
-  id         String    @id @default(uuid())
-  menuItem   MenuItem  @relation(fields: [menuItemId], references: [id])
+  id         String   @id @default(uuid())
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   menuItemId String
-  modifier   Modifier  @relation(fields: [modifierId], references: [id])
+  modifier   Modifier @relation(fields: [modifierId], references: [id])
   modifierId String
+  restaurantId String?  // Ensure modifier belongs to same restaurant as menu item
+  branchId   String?  // Ensure modifier belongs to same branch as menu item
+
+  // Ensure a modifier can only be linked to a menu item in the same restaurant/branch
+  @@unique([menuItemId, modifierId, restaurantId, branchId])
 }

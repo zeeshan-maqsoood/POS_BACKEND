@@ -98,7 +98,18 @@ export const userService = {
           id: true,
           email: true,
           name: true,
-          branch: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              restaurant: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              }
+            }
+          },
           role: true,
           status: true,
           permissions: {
@@ -121,7 +132,17 @@ export const userService = {
         id: newUser.id,
         email: newUser.email,
         name: newUser.name,
-        branch: newUser.branch || null,
+        branch: newUser.branch ? {
+          id: newUser.branch.id,
+          name: newUser.branch.name,
+          restaurant: newUser.branch.restaurant ? {
+            id: newUser.branch.restaurant.id,
+            name: newUser.branch.restaurant.name,
+          } : {
+            id: '',
+            name: '',
+          }
+        } : null,
         role: newUser.role,
         status: newUser.status,
         permissions: newUser.permissions.map((p: any) => ({
@@ -215,7 +236,6 @@ export const userService = {
           id: true,
           email: true,
           name: true,
-          branch: true,
           role: true,
           status: true,
           permissions: {
@@ -231,6 +251,18 @@ export const userService = {
           isShiftActive: true,
           createdAt: true,
           updatedAt: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              restaurant: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              }
+            }
+          }
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -239,7 +271,14 @@ export const userService = {
         id: user.id,
         email: user.email,
         name: user.name,
-        branch: user.branch || null,
+        branch: user.branch ? {
+          id: user.branch.id,
+          name: user.branch.name,
+          restaurant: user.branch.restaurant ? {
+            id: user.branch.restaurant.id,
+            name: user.branch.restaurant.name,
+          } : null
+        } : null,
         role: user.role,
         permissions: user.permissions.map((p: any) => ({
           id: p.id,
@@ -275,7 +314,18 @@ export const userService = {
           id: true,
           email: true,
           name: true,
-          branch: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              restaurant: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              }
+            }
+          },
           role: true,
           status: true,
           permissions: {
@@ -302,7 +352,17 @@ export const userService = {
         id: user.id,
         email: user.email,
         name: user.name,
-        branch: user.branch || null,
+        branch: user.branch ? {
+          id: user.branch.id,
+          name: user.branch.name,
+          restaurant: user.branch.restaurant ? {
+            id: user.branch.restaurant.id,
+            name: user.branch.restaurant.name,
+          } : {
+            id: '',
+            name: '',
+          }
+        } : null,
         role: user.role,
         permissions: user.permissions.map(p => ({
           id: p.id,
@@ -332,7 +392,18 @@ export const userService = {
           id: true,
           email: true,
           name: true,
-          branch: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              restaurant: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              }
+            }
+          },
           role: true,
           status: true,
           permissions: {
@@ -359,7 +430,17 @@ export const userService = {
         id: user.id,
         email: user.email,
         name: user.name,
-        branch: user.branch || null,
+        branch: user.branch ? {
+          id: user.branch.id,
+          name: user.branch.name,
+          restaurant: user.branch.restaurant ? {
+            id: user.branch.restaurant.id,
+            name: user.branch.restaurant.name,
+          } : {
+            id: '',
+            name: '',
+          }
+        } : null,
         role: user.role,
         permissions: user.permissions.map(p => ({
           id: p.id,
@@ -386,7 +467,15 @@ export const userService = {
       // Check if user exists
       const existingUser = await prisma.user.findUnique({
         where: { id },
-        include: { permissions: true }
+        select: {
+          id: true,
+          permissions: {
+            select: {
+              id: true,
+              permission: true,
+            }
+          }
+        }
       });
       console.log(data, "data")
       if (!existingUser) {
@@ -420,7 +509,24 @@ export const userService = {
               }
             })
           },
-          include: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                restaurant: {
+                  select: {
+                    id: true,
+                    name: true,
+                  }
+                }
+              }
+            },
+            role: true,
+            status: true,
             permissions: {
               select: {
                 id: true,
@@ -429,6 +535,10 @@ export const userService = {
                 createdAt: true,
               },
             },
+            shiftSchedule: true,
+            isShiftActive: true,
+            createdAt: true,
+            updatedAt: true,
           }
         });
 
@@ -437,7 +547,14 @@ export const userService = {
           id: updatedUser.id,
           email: updatedUser.email,
           name: updatedUser.name,
-          branch: updatedUser.branch || null,
+          branch: updatedUser.branch ? {
+            id: updatedUser.branch.id,
+            name: updatedUser.branch.name,
+            restaurant: updatedUser.branch.restaurant ? {
+              id: updatedUser.branch.restaurant.id,
+              name: updatedUser.branch.restaurant.name,
+            } : null
+          } : null,
           role: updatedUser.role,
           status: updatedUser.status,
           permissions: updatedUser.permissions.map((p: any) => ({
@@ -522,7 +639,27 @@ export const userService = {
     try {
       const user = await prisma.user.findUnique({
         where: { email: email.toLowerCase().trim() },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              restaurant: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              }
+            }
+          },
+          role: true,
+          status: true,
+          password: true,
+          createdAt: true,
+          updatedAt: true,
           permissions: {
             select: {
               permission: true,
@@ -547,7 +684,14 @@ export const userService = {
           userId: user.id,
           email: user.email,
           role: user.role,
-          branch: user.branch,
+          branch: user.branch ? {
+            id: user.branch.id,
+            name: user.branch.name,
+            restaurant: user.branch.restaurant ? {
+              id: user.branch.restaurant.id,
+              name: user.branch.restaurant.name,
+            } : null
+          } : null,
           permissions: user.permissions.map((p) => p.permission),
         },
         process.env.JWT_SECRET || 'your-secret-key',
@@ -560,7 +704,14 @@ export const userService = {
           id: user.id,
           email: user.email,
           name: user.name,
-          branch: user.branch || null,
+          branch: user.branch ? {
+            id: user.branch.id,
+            name: user.branch.name,
+            restaurant: user.branch.restaurant ? {
+              id: user.branch.restaurant.id,
+              name: user.branch.restaurant.name,
+            } : null
+          } : null,
           role: user.role,
           status: user.status,
           permissions: user.permissions.map((p) => p.permission),

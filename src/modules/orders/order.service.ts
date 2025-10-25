@@ -236,13 +236,17 @@ export const orderService = {
         console.error(`[getOrders] Kitchen staff ${user.id} has no branch assigned`);
         throw ApiError.forbidden('No branch assigned to your account');
       }
-      where.branchName = user.branch;
-      console.log(`[getOrders] Filtering orders for kitchen staff - Branch: ${user.branch}`);
+      // Allow filtering by specific branch if provided, otherwise use their own branch
+      where.branchName = query.branchName || user.branch;
+      console.log(`[getOrders] Filtering orders for kitchen staff - Branch: ${where.branchName}`);
     }
     // For managers, show all orders from their branch (not just their own)
     else if (user.role === 'MANAGER') {
-      // Only filter by their branch, allow seeing all orders from their branch
-      if (user.branch) {
+      // Allow filtering by specific branch if provided, otherwise use their own branch
+      if (query.branchName) {
+        where.branchName = query.branchName;
+        console.log(`[getOrders] Manager filtering by branch: ${query.branchName}`);
+      } else if (user.branch) {
         where.branchName = user.branch;
         console.log(`[getOrders] Filtering orders for manager - Branch: ${user.branch}, All branch orders`);
       } else {
@@ -256,7 +260,13 @@ export const orderService = {
       where.branchName = query.branchName;
       console.log(`[getOrders] Admin filtering by branch: ${query.branchName}`);
     }
-    console.log(where, "where")
+
+    // Apply restaurant filter for all users
+    if (query.restaurantId) {
+      where.restaurantId = query.restaurantId;
+      console.log(`[getOrders] Filtering by restaurant: ${query.restaurantId}`);
+    }
+
     // Apply other filters
     if (query.status) where.status = query.status;
     if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
@@ -580,6 +590,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
         data: {
           ...orderWithTotals,
           branchName: orderData.branchName,
+          restaurantId: orderData.restaurantId, // Add restaurantId here
           createdById: currentUser.userId as string,
           orderType: orderData.orderType,
           items: {
@@ -680,6 +691,7 @@ interface GetOrdersServiceParams {
   paymentStatus?: PaymentStatus;
   orderType?: OrderType;
   branchName?: string;
+  restaurantId?: string;
   startDate?: Date;
   endDate?: Date;
   search?: string;
@@ -714,13 +726,17 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
       console.error(`[getOrdersService] Kitchen staff ${user.id} has no branch assigned`);
       throw new Error('No branch assigned to your account');
     }
-    where.branchName = user.branch;
-    console.log(`[getOrdersService] Filtering orders for kitchen staff - Branch: ${user.branch}`);
+    // Allow filtering by specific branch if provided, otherwise use their own branch
+    where.branchName = params.branchName || user.branch;
+    console.log(`[getOrdersService] Filtering orders for kitchen staff - Branch: ${where.branchName}`);
   }
   // For managers, show all orders from their branch (not just their own)
   else if (user.role === 'MANAGER') {
-    // Only filter by their branch, allow seeing all orders from their branch
-    if (user.branch) {
+    // Allow filtering by specific branch if provided, otherwise use their own branch
+    if (params.branchName) {
+      where.branchName = params.branchName;
+      console.log(`[getOrdersService] Manager filtering by branch: ${params.branchName}`);
+    } else if (user.branch) {
       where.branchName = user.branch;
       console.log(`[getOrdersService] Filtering orders for manager - Branch: ${user.branch}, All branch orders`);
     } else {
@@ -733,6 +749,12 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
   else if (user.role === 'ADMIN' && params.branchName) {
     where.branchName = params.branchName;
     console.log(`[getOrdersService] Admin filtering by branch: ${params.branchName}`);
+  }
+
+  // Apply restaurant filter for all users
+  if (params.restaurantId) {
+    where.restaurantId = params.restaurantId;
+    console.log(`[getOrdersService] Filtering by restaurant: ${params.restaurantId}`);
   }
 
   // Apply other filters
@@ -891,10 +913,11 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
   }
 }
 
-export async function getOrderStatsService({ startDate, endDate, branchName }: {
+export async function getOrderStatsService({ startDate, endDate, branchName, restaurantId }: {
   startDate?: Date;
   endDate?: Date;
   branchName?: string;
+  restaurantId?: string;
 }) {
   try {
     const where: any = {};
@@ -916,27 +939,142 @@ export async function getOrderStatsService({ startDate, endDate, branchName }: {
       where.branchName = branchName;
     }
 
+    // Add restaurant filter if provided - use flexible approach
+    if (restaurantId) {
+      // Try to match orders that either have the restaurantId directly or belong to a branch of that restaurant
+      where.OR = [
+        { restaurantId: restaurantId },
+        {
+          branch: {
+            restaurantId: restaurantId
+          }
+        }
+      ];
+    }
+
+    console.log('=== STATS SERVICE DEBUG ===');
+    console.log('Input params:', { startDate, endDate, branchName, restaurantId });
+    console.log('Final where clause:', JSON.stringify(where, null, 2));
+
     // Get all orders count
     const totalOrders = await prisma.order.count({ where });
+    console.log('Total orders found with current filter:', totalOrders);
+
+    // If still no orders found, try even more flexible approaches
+    if (totalOrders === 0 && (restaurantId || branchName)) {
+      console.log('No orders found, trying alternative filtering approaches...');
+
+      // Try 1: Just restaurantId without branch filter
+      if (restaurantId && !branchName) {
+        const ordersByRestaurantOnly = await prisma.order.count({
+          where: {
+            OR: [
+              { restaurantId: restaurantId },
+              { branch: { restaurantId: restaurantId } }
+            ]
+          }
+        });
+        console.log('Orders found with restaurant only:', ordersByRestaurantOnly);
+
+        if (ordersByRestaurantOnly > 0) {
+          console.log('Found orders with restaurant only, proceeding with that...');
+          where.OR = [
+            { restaurantId: restaurantId },
+            { branch: { restaurantId: restaurantId } }
+          ];
+        }
+      }
+
+      // Try 2: Just branchName without restaurant filter
+      else if (branchName && !restaurantId) {
+        const ordersByBranchOnly = await prisma.order.count({
+          where: { branchName: branchName }
+        });
+        console.log('Orders found with branch only:', ordersByBranchOnly);
+
+        if (ordersByBranchOnly > 0) {
+          console.log('Found orders with branch only, proceeding with that...');
+          where.branchName = branchName;
+        }
+      }
+
+      // Try 3: Check what orders actually exist in the database
+      else if (restaurantId && branchName) {
+        console.log('Checking actual orders in database for debugging...');
+
+        // Get sample of orders to see what data they contain
+        const sampleOrders = await prisma.order.findMany({
+          take: 5,
+          select: {
+            id: true,
+            branchName: true,
+            restaurantId: true,
+            status: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                restaurantId: true,
+                restaurant: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        console.log('Sample orders in database:', JSON.stringify(sampleOrders, null, 2));
+
+        // Check if there are any orders for this restaurant at all
+        const allRestaurantOrders = await prisma.order.count({
+          where: {
+            OR: [
+              { restaurantId: restaurantId },
+              { branch: { restaurantId: restaurantId } }
+            ]
+          }
+        });
+        console.log('Total orders for restaurant (any branch):', allRestaurantOrders);
+
+        // Check if there are any orders for this branch name
+        const allBranchOrders = await prisma.order.count({
+          where: { branchName: branchName }
+        });
+        console.log('Total orders for branch name:', allBranchOrders);
+      }
+    }
+
+    // Use the potentially updated where clause
+    const finalWhere = totalOrders > 0 ? where : where;
+    console.log('Final where clause after debugging:', JSON.stringify(finalWhere, null, 2));
 
     // Get orders by status
-    const [completedOrders, cancelledOrders, pendingOrders] = await Promise.all([
+    const [completedOrders, cancelledOrders, pendingOrders, processingOrders] = await Promise.all([
       prisma.order.count({
         where: {
-          ...where,
+          ...finalWhere,
           status: 'COMPLETED'
         }
       }),
       prisma.order.count({
         where: {
-          ...where,
+          ...finalWhere,
           status: 'CANCELLED'
         }
       }),
       prisma.order.count({
         where: {
-          ...where,
+          ...finalWhere,
           status: 'PENDING'
+        }
+      }),
+      prisma.order.count({
+        where: {
+          ...finalWhere,
+          status: 'PROCESSING'
         }
       })
     ]);
@@ -944,7 +1082,7 @@ export async function getOrderStatsService({ startDate, endDate, branchName }: {
     // Get total revenue from completed and paid orders
     const revenueResult = await prisma.order.aggregate({
       where: {
-        ...where,
+        ...finalWhere,
         status: 'COMPLETED',
         paymentStatus: 'PAID'
       },
@@ -960,17 +1098,18 @@ export async function getOrderStatsService({ startDate, endDate, branchName }: {
       : 0;
 
     // Calculate cancellation rate
-    const cancellationRate = totalOrders > 0
-      ? (cancelledOrders / totalOrders) * 100
+    const totalOrdersFinal = completedOrders + cancelledOrders + pendingOrders + processingOrders;
+    const cancellationRate = totalOrdersFinal > 0
+      ? (cancelledOrders / totalOrdersFinal) * 100
       : 0;
 
     // Get orders by status for the pie chart
     const ordersByStatus = await prisma.order.groupBy({
       by: ['status'],
       where: {
-        ...where,
+        ...finalWhere,
         status: {
-          in: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'COMPLETED', 'CANCELLED']
+          in: ['PENDING', 'PROCESSING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'COMPLETED', 'CANCELLED']
         }
       },
       _count: {
@@ -979,10 +1118,11 @@ export async function getOrderStatsService({ startDate, endDate, branchName }: {
     });
 
     return {
-      totalOrders,
+      totalOrders: totalOrdersFinal,
       completedOrders,
       cancelledOrders,
       pendingOrders,
+      processingOrders,
       ordersByStatus: ordersByStatus.map(item => ({
         status: item.status,
         count: item._count._all
@@ -1465,24 +1605,34 @@ export async function getOrderByTableService(currentUser: JwtPayload, branchName
     console.log(currentUser, "currentUser");
     console.log(branchName, "branchName");
 
+    // Tables should be occupied until payment status is PAID
+    // This means we want orders where payment is NOT yet completed
     const orders = await prisma.order.findMany({
       where: {
         branchName: branchName,
-        status: 'PENDING',
-        paymentStatus: 'PENDING',
+        paymentStatus: {
+          not: 'PAID'  // Tables are occupied until payment is completed
+        },
         tableNumber: { not: null }
       },
       select: {
-        tableNumber: true
+        tableNumber: true,
+        paymentStatus: true,
+        status: true
       },
       orderBy: {
         createdAt: 'asc'
       },
       distinct: ['tableNumber']
     });
-    console.log(orders, "orders");
+    console.log(orders, "orders with payment status");
 
-    return orders;
+    // Return only the table numbers that are occupied
+    const occupiedTables = orders.map(order => ({
+      tableNumber: order.tableNumber
+    }));
+
+    return occupiedTables;
   } catch (error) {
     console.error('Error fetching orders by table:', error);
     throw new Error('Failed to fetch orders by table');

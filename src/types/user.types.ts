@@ -59,7 +59,14 @@ export interface SafeUser {
   id: string;
   email: string;
   name: string | null;
-  branch: string | null;
+  branch: {
+    id: string;
+    name: string;
+    restaurant: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
   role: UserRole;
   status: UserStatus;
   permissions: UserPermission[];

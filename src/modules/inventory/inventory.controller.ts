@@ -92,9 +92,37 @@ export const inventorySubcategoryController = {
   },
   list: async (req: Request, res: Response) => {
     try {
-      const subcategories = await inventorySubcategoryService.list(req.user, req.query);
+      const { user } = req as any;
+
+      // Extract query parameters and normalize branch name
+      const queryParams = { ...req.query };
+
+      // If user is manager and has a branch, filter by branchName
+      if (user?.role === 'MANAGER' && user?.branch) {
+        // Normalize branch name to match your database format
+        const normalizedBranch = user.branch.startsWith('branch')
+          ? user.branch.replace('branch1', 'Bradford')
+            .replace('branch2', 'Leeds')
+            .replace('branch3', 'Helifax')
+            .replace('branch4', 'Darley St Market')
+          : user.branch;
+
+        queryParams.branchName = normalizedBranch;
+      }
+
+      console.log('InventorySubcategoryService.list called with:', {
+        userRole: user?.role,
+        userBranch: user?.branch,
+        queryParams
+      });
+
+      // ✅ FIX: Pass user as first parameter, queryParams as second
+      const subcategories = await inventorySubcategoryService.list(user, queryParams);
+
+      // ✅ FIX: Use consistent ApiResponse format
       ApiResponse.send(res, ApiResponse.success(subcategories, "Inventory subcategories retrieved successfully"));
     } catch (error: any) {
+      // ✅ FIX: Use consistent error handling
       ApiResponse.send(res, new ApiResponse(false, error.message, null, 400));
     }
   },
@@ -137,9 +165,37 @@ export const inventoryItemController = {
   },
   list: async (req: Request, res: Response) => {
     try {
-      const items = await inventoryItemService.list(req.user, req.query);
+      const { user } = req as any;
+
+      // Extract query parameters and normalize branch name
+      const queryParams = { ...req.query };
+
+      // If user is manager and has a branch, filter by branchName
+      if (user?.role === 'MANAGER' && user?.branch) {
+        // Normalize branch name to match your database format
+        const normalizedBranch = user.branch.startsWith('branch')
+          ? user.branch.replace('branch1', 'Bradford')
+            .replace('branch2', 'Leeds')
+            .replace('branch3', 'Helifax')
+            .replace('branch4', 'Darley St Market')
+          : user.branch;
+
+        queryParams.branchName = normalizedBranch;
+      }
+
+      console.log('InventoryItemService.list called with:', {
+        userRole: user?.role,
+        userBranch: user?.branch,
+        queryParams
+      });
+
+      // ✅ FIX: Pass user as first parameter, queryParams as second
+      const items = await inventoryItemService.list(user, queryParams);
+
+      // ✅ FIX: Use consistent ApiResponse format
       ApiResponse.send(res, ApiResponse.success(items, "Inventory items retrieved successfully"));
     } catch (error: any) {
+      // ✅ FIX: Use consistent error handling
       ApiResponse.send(res, new ApiResponse(false, error.message, null, 400));
     }
   },

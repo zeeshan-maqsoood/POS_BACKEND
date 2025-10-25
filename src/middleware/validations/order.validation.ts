@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { OrderStatus, PaymentStatus, PaymentMethod } from "@prisma/client";
+import { OrderStatus, PaymentStatus, PaymentMethod, OrderType } from "@prisma/client";
 
 // Get enum values as arrays
 const orderStatuses = Object.values(OrderStatus);
@@ -64,6 +64,9 @@ export const createOrderValidator = {
     branchName: Joi.string().required().messages({
       'string.empty': 'Branch name is required',
       'any.required': 'Branch name is required'
+    }),
+    restaurantId: Joi.string().optional().allow('').messages({
+      'string.base': 'Restaurant ID must be a string'
     }),
     status: Joi.string().valid(...orderStatuses).default('PENDING'),
     paymentStatus: Joi.string().valid(...paymentStatuses).default('PENDING'),
@@ -197,6 +200,16 @@ export type CreateOrderInput = {
   paymentMethod: PaymentMethod;
   deliveryAddress?: string;
   tableNumber?: string;
+  restaurantId?: string;
+  branchName?: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  orderType?: OrderType;
+  status?: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  discount?: number;
+  notes?: string;
 };
 
 export type UpdateOrderStatusInput = {

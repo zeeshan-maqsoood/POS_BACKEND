@@ -8,7 +8,7 @@ export const inventoryCategoryService = {
     console.log(user, "inventory user");
 
     // For managers, set their branch if not provided
-    if (user?.role === 'MANAGER' && user?.branch && !data.branch) {
+    if (user?.role === 'MANAGER' && user?.branch && !data.branchName) {
       const normalizedUserBranch = user.branch.startsWith('branch')
         ? user.branch.replace('branch1', 'Main Branch')
           .replace('branch2', 'Downtown Branch')
@@ -16,17 +16,28 @@ export const inventoryCategoryService = {
           .replace('branch4', 'Westside Branch')
           .replace('branch5', 'Eastside Branch')
         : user.branch;
-      data.branch = normalizedUserBranch;
+      data.branchName = normalizedUserBranch;
     }
     // For admins, if no branch is specified, throw an error
-    else if (user?.role === 'ADMIN' && !data.branch) {
+    else if (user?.role === 'ADMIN' && !data.branchName) {
       throw new Error('Branch is required when creating inventory categories as admin');
     }
+
+    // Handle restaurantId - for managers use their restaurant, for admins use provided restaurantId
+    let restaurantId = data.restaurantId;
+    if (user?.role === 'MANAGER' && !restaurantId) {
+      // For managers, we need to get their restaurant ID from their branch
+      // For now, we'll use a default or get it from the user object
+      restaurantId = user?.restaurantId;
+    }
+
     const payload = {
       name: data.name,
       description: data.description,
       color: data.color,
-      branchName: data.branch
+      branchName: data.branchName,
+      restaurantId: restaurantId,
+      isActive: data.isActive !== undefined ? data.isActive : true
     }
     return prisma.inventoryCategory.create({
       data: payload,
@@ -58,7 +69,12 @@ export const inventoryCategoryService = {
           .replace('branch5', 'Eastside Branch')
         : user.branch;
 
-      where.branch = normalizedUserBranch;
+      where.branchName = normalizedUserBranch;
+    }
+
+    // If restaurantId is provided as a query parameter, use it for filtering
+    if (queryParams?.restaurantId) {
+      where.restaurantId = queryParams.restaurantId;
     }
 
     // If branchName is provided as a query parameter, use it for filtering
@@ -71,7 +87,7 @@ export const inventoryCategoryService = {
           .replace('branch5', 'Eastside Branch')
         : queryParams.branchName;
 
-      where.branch = normalizedQueryBranch;
+      where.branchName = normalizedQueryBranch;
     }
 
     const categories = await prisma.inventoryCategory.findMany({
@@ -170,13 +186,13 @@ export const inventoryCategoryService = {
       }
     }
 
-    const { branch, ...updatedData } = data
+    const { branch, restaurantId, ...updatedData } = data
     const payload = {
       ...updatedData,
-      branchName: branch
+      branchName: data.branchName,
+      restaurantId: data.restaurantId,
+      isActive: data.isActive !== undefined ? data.isActive : true
     }
-
-
 
     return prisma.inventoryCategory.update({
       where: { id },
@@ -257,12 +273,20 @@ export const inventorySubcategoryService = {
       name: data.name,
       description: data.description,
       categoryId: data.categoryId,
+      isActive: data.isActive !== undefined ? data.isActive : true,
     };
 
+    // Handle restaurantId
+    if (data.restaurantId) {
+      subcategoryData.restaurantId = data.restaurantId;
+    } else if (user?.role === 'MANAGER' && user?.restaurantId) {
+      subcategoryData.restaurantId = user.restaurantId;
+    }
+
     // Handle branch logic - use branchName field
-    if (data.branch) {
+    if (data.branchName) {
       // If branch is provided in the form, use it
-      subcategoryData.branchName = data.branch;
+      subcategoryData.branchName = data.branchName;
     } else if (user?.role === 'MANAGER' && user?.branch) {
       // For managers, set their branch if not provided
       const normalizedUserBranch = user.branch.startsWith('branch')
@@ -275,7 +299,7 @@ export const inventorySubcategoryService = {
       subcategoryData.branchName = normalizedUserBranch;
     }
     // For admins, if no branch is specified, throw an error
-    else if (user?.role === 'ADMIN' && !data.branch) {
+    else if (user?.role === 'ADMIN' && !data.branchName) {
       throw new Error('Branch is required when creating inventory subcategories as admin');
     }
 
@@ -305,6 +329,11 @@ export const inventorySubcategoryService = {
         : user.branch;
 
       where.branchName = normalizedUserBranch;
+    }
+
+    // If restaurantId is provided as a query parameter, use it for filtering
+    if (queryParams?.restaurantId) {
+      where.restaurantId = queryParams.restaurantId;
     }
 
     if (queryParams?.categoryId) {
@@ -383,15 +412,21 @@ export const inventorySubcategoryService = {
       }
     }
 
-    // Prepare update data - map branch to branchName
+    // Prepare update data
     const updateData: any = {
       name: data.name,
       description: data.description,
+      isActive: data.isActive !== undefined ? data.isActive : true,
     };
 
-    // Only update branchName if branch is provided
-    if (data.branch) {
-      updateData.branchName = data.branch;
+    // Handle restaurantId
+    if (data.restaurantId) {
+      updateData.restaurantId = data.restaurantId;
+    }
+
+    // Handle branchName
+    if (data.branchName) {
+      updateData.branchName = data.branchName;
     }
 
     return prisma.inventorySubcategory.update({
@@ -462,11 +497,18 @@ export const inventoryItemService = {
     else if (user?.role === 'ADMIN' && !data.branchName) {
       throw new Error('Branch is required when creating inventory items as admin');
     }
-  
+
+    // Handle restaurantId - for managers use their restaurant, for admins use provided restaurantId
+    let restaurantId = data.restaurantId;
+    if (user?.role === 'MANAGER' && !restaurantId) {
+      // For managers, we need to get their restaurant ID from their branch
+      restaurantId = user?.restaurantId;
+    }
 
     return prisma.inventoryItem.create({
       data: {
         ...data,
+        restaurantId: restaurantId,
         lastUpdated: new Date()
       },
       include: {
@@ -491,6 +533,11 @@ export const inventoryItemService = {
       where.branchName = normalizedUserBranch;
     }
 
+    // If restaurantId is provided as a query parameter, use it for filtering
+    if (queryParams?.restaurantId) {
+      where.restaurantId = queryParams.restaurantId;
+    }
+
     if (queryParams?.categoryId) {
       where.categoryId = queryParams.categoryId;
     }
@@ -506,8 +553,18 @@ export const inventoryItemService = {
     return prisma.inventoryItem.findMany({
       where,
       include: {
-        category: true,
-        subcategory: true
+        category: {
+          include: {
+            subcategories: true
+          }
+        },
+        subcategory: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       },
       orderBy: {
         lastUpdated: 'desc'
@@ -581,6 +638,16 @@ export const inventoryItemService = {
       status: newStatus,
       lastUpdated: new Date()
     };
+
+    // Handle restaurantId update
+    if (data.restaurantId !== undefined) {
+      updateData.restaurantId = data.restaurantId;
+    }
+
+    // Handle branchName update
+    if (data.branchName !== undefined) {
+      updateData.branchName = data.branchName;
+    }
   
     // Create status change transaction if status changed
     let statusChangeTransaction = null;

@@ -35,13 +35,14 @@ export const getUserBranches = async (req: Request, res: Response) => {
   }
 };
 
-export const getBranchesForDropdown = async (req: Request, res: Response) => {
+export const getBranchesByRestaurant = async (req: Request, res: Response) => {
   try {
-    const branches = await branchService.getBranchesForDropdown();
-    ApiResponse.send(res, ApiResponse.success(branches, "Branches for dropdown retrieved successfully"));
+    const { restaurantId } = req.params;
+    const branches = await branchService.getBranchesByRestaurant(restaurantId);
+    ApiResponse.send(res, ApiResponse.success(branches, "Branches for restaurant retrieved successfully"));
   } catch (error: any) {
-    console.error('Error getting branches for dropdown:', error);
-    ApiResponse.send(res, ApiResponse.error(error.message || 'Failed to retrieve branches for dropdown', 500));
+    console.error('Error getting branches for restaurant:', error);
+    ApiResponse.send(res, ApiResponse.error(error.message || 'Failed to retrieve branches for restaurant', 500));
   }
 };
 
@@ -61,6 +62,16 @@ export const getBranchById = async (req: Request, res: Response) => {
   }
 };
 
+export const getBranchesForDropdown = async (req: Request, res: Response) => {
+  try {
+    const branches = await branchService.getBranchesForDropdown();
+    ApiResponse.send(res, ApiResponse.success(branches, "Branches for dropdown retrieved successfully"));
+  } catch (error: any) {
+    console.error('Error getting branches for dropdown:', error);
+    ApiResponse.send(res, ApiResponse.error(error.message || 'Failed to retrieve branches for dropdown', 500));
+  }
+};
+
 export const getBranchStats = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -72,7 +83,6 @@ export const getBranchStats = async (req: Request, res: Response) => {
     ApiResponse.send(res, ApiResponse.error(error.message || 'Failed to retrieve branch stats', 500));
   }
 };
-
 export const createBranch = async (req: Request, res: Response) => {
   try {
     const currentUser = req.user as unknown as JwtPayload;
@@ -88,6 +98,7 @@ export const createBranch = async (req: Request, res: Response) => {
     if (existingBranch) {
       return ApiResponse.send(res, ApiResponse.error("Branch name already exists", 400));
     }
+    
 
     const newBranch = await branchService.createBranch(branchData);
 

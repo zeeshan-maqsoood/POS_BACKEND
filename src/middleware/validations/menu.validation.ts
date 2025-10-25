@@ -6,7 +6,9 @@ export const createCategorySchema = Joi.object({
   description: Joi.string().allow(""),
   imageUrl: Joi.string().uri().optional(),
   isActive: Joi.boolean().default(true),
+  branchId: Joi.string().optional().allow(null), // Allow null for global categories
   branchName: Joi.string().optional(),
+  restaurantId: Joi.string().optional(),
 });
 
 export const updateCategorySchema = createCategorySchema.fork(
@@ -25,7 +27,10 @@ export const createMenuItemSchema = Joi.object({
   taxExempt: Joi.boolean().default(false),
   isActive: Joi.boolean().default(true),
   categoryId: Joi.string().required(),
+  branchId: Joi.string().optional().allow(null), // Allow null for global items
   branchName: Joi.string().optional(),
+  restaurantId: Joi.string().optional(),
+  tags: Joi.array().items(Joi.string()).optional(),
   // Modifiers field for many-to-many relationship
   modifiers: Joi.object({
     connect: Joi.array().items(
@@ -44,7 +49,6 @@ export const createMenuItemSchema = Joi.object({
       })
     )
   }).optional(),
-  tags: Joi.array().items(Joi.string()).optional(),
   createdAt:Joi.string().optional().allow(null),
   updatedAt:Joi.string().optional().allow(null)
 });
@@ -63,6 +67,12 @@ export const createModifierSchema = Joi.object({
   isRequired: Joi.boolean().default(false),
   isActive: Joi.boolean().default(true),
   type: Joi.string().valid('SINGLE', 'MULTIPLE').default('SINGLE'),
+  minSelection: Joi.number().min(0).default(0).optional(),
+  maxSelection: Joi.number().min(1).default(1).optional(),
+  restaurantId: Joi.string().allow('').optional(),
+  restaurantName: Joi.string().allow('').optional(),
+  branchId: Joi.string().optional().allow(null), // Allow null for global modifiers
+  branchName: Joi.string().allow('').optional(),
 
   modifierIngredients: Joi.object({
     create: Joi.array().items(

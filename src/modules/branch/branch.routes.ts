@@ -4,9 +4,11 @@ import {
   getActiveBranches,
   getUserBranches,
   getBranchesForDropdown,
+  getBranchesByRestaurant,
   getBranchById,
   getBranchStats,
   createBranch,
+  
   updateBranch,
   deleteBranch
 } from "./branch.controllers";
@@ -14,17 +16,18 @@ import { authenticate } from "../../middleware/authenticate";
 
 const router = Router();
 
+
 // GET /api/branches - Get all branches (admin only)
 router.get("/", authenticate, getAllBranches);
 
 // GET /api/branches/active - Get all active branches
 router.get("/active", authenticate, getActiveBranches);
 
-// GET /api/branches/user - Get branches for current user
-router.get("/user", authenticate, getUserBranches);
-
-// GET /api/branches/dropdown - Get branches for dropdown (active branches)
+// GET /api/branches/dropdown - Get branches for dropdown
 router.get("/dropdown", authenticate, getBranchesForDropdown);
+
+// GET /api/branches/restaurant/:restaurantId - Get branches for a specific restaurant
+router.get("/restaurant/:restaurantId", authenticate, getBranchesByRestaurant);
 
 // GET /api/branches/:id - Get specific branch by ID
 router.get("/:id", authenticate, getBranchById);

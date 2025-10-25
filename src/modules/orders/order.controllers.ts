@@ -11,6 +11,7 @@ interface OrderQueryParams {
   paymentStatus?: PaymentStatus;
   orderType?: OrderType;
   branchName?: string;
+  restaurantId?: string;
   startDate?: string;
   endDate?: string;
   search?: string;
@@ -94,6 +95,7 @@ export const getOrders = async (req: Request<{}, {}, {}, OrderQueryParams>, res:
       paymentStatus, 
       orderType,
       branchName,
+      restaurantId,
       startDate,
       endDate,
       search,
@@ -109,6 +111,7 @@ export const getOrders = async (req: Request<{}, {}, {}, OrderQueryParams>, res:
         paymentStatus: paymentStatus as PaymentStatus | undefined,
         orderType: orderType as OrderType | undefined,
         branchName: branchName as string | undefined,
+        restaurantId: restaurantId as string | undefined,
         startDate: startDate ? parseISO(startDate) : undefined,
         endDate: endDate ? parseISO(endDate) : undefined,
         search,
@@ -130,7 +133,7 @@ export const getOrders = async (req: Request<{}, {}, {}, OrderQueryParams>, res:
 export const updatePaymentStatus = async (req: Request, res: Response) => {
   console.log('\n=== updatePaymentStatus called ===');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
-  
+
   try {
     const currentUser = req.user as unknown as JwtPayload;
     const { id } = req.params;
@@ -144,7 +147,7 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
     }
 
     console.log('Calling updatePaymentStatusService...');
-    
+
     // First update the payment status
     const order = await orderService.updatePaymentStatusService(
       id,
@@ -161,6 +164,20 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
       paymentMethod: order.paymentMethod
     });
 
+    // Notify about payment status change via WebSocket
+    const io = getIo();
+    io.emit('payment-status-updated', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      tableNumber: order.tableNumber,
+      branchName: order.branchName,
+      updatedBy: currentUser.userId,
+      message: `Payment status updated to ${paymentStatus}`
+    });
+
     // Print receipt when payment is completed
     if (paymentStatus === 'PAID') {
       console.log('Payment is PAID, calling printOrderReceipt...');
@@ -175,11 +192,13 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
 
 export const getOrderStats = async (req: Request, res: Response) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, branchName, restaurantId } = req.query;
     
     const stats = await orderService.getOrderStatsService({
       startDate: startDate && isDate(new Date(startDate as string)) ? new Date(startDate as string) : undefined,
       endDate: endDate && isDate(new Date(endDate as string)) ? new Date(endDate as string) : undefined,
+      branchName: branchName as string | undefined,
+      restaurantId: restaurantId as string | undefined,
     });
     
     ApiResponse.send(res, ApiResponse.success(stats, "Order statistics retrieved successfully"));
@@ -231,7 +250,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     io.emit('order-status-updated', {
       orderId: updatedOrder.id,
       status: updatedOrder.status,
-      updatedBy: currentUser.id,
+      updatedBy: currentUser.userId,
       message: `Order status updated to ${status}`
     });
 
@@ -243,7 +262,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           isStatusReceipt: true,
           previousStatus: currentOrder.status,
           newStatus: status,
-          updatedBy: currentUser.id || 'System'
+          updatedBy: currentUser.userId || 'System'
         });
         console.log('Order completion receipt printed successfully');
       } catch (printError) {

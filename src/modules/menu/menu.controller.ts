@@ -61,24 +61,24 @@ export const menuItemController = {
 export const modifierController = {
   create: async (req: Request, res: Response) => {
     console.log(req.body)
-    const modifier = await modifierService.create(req.body);
+    const modifier = await modifierService.create(req.body, req.user);
     ApiResponse.send(res, ApiResponse.success(modifier, "Modifier created successfully", 201));
   },
-  list: async (_req: Request, res: Response) => {
-    const modifiers = await modifierService.list();
+  list: async (req: Request, res: Response) => {
+    const modifiers = await modifierService.list(req.user, req.query);
     ApiResponse.send(res, ApiResponse.success(modifiers, "Modifiers retrieved successfully"));
   },
   get: async (req: Request, res: Response) => {
-    const modifier = await modifierService.get(req.params.id);
+    const modifier = await modifierService.get(req.params.id, req.user);
     if (!modifier) throw ApiError.notFound("Modifier not found");
     ApiResponse.send(res, ApiResponse.success(modifier, "Modifier retrieved successfully"));
   },
   update: async (req: Request, res: Response) => {
-    const modifier = await modifierService.update(req.params.id, req.body);
+    const modifier = await modifierService.update(req.params.id, req.body, req.user);
     ApiResponse.send(res, ApiResponse.success(modifier, "Modifier updated successfully"));
   },
   remove: async (req: Request, res: Response) => {
-    await modifierService.remove(req.params.id);
+    await modifierService.remove(req.params.id, req.user);
     ApiResponse.send(res, ApiResponse.success(null, "Modifier deleted successfully"));
   },
 };

@@ -22,6 +22,7 @@ export interface GetOrdersQuery {
   paymentStatus?: PaymentStatus;
   orderType?: OrderType;
   branchName?: string;
+  restaurantId?: string;
   startDate?: string;
   endDate?: string;
   search?: string;
@@ -95,6 +96,7 @@ export interface CreateOrderInput {
   customerPhone?: string | null;
   notes?: string | null;
   branchName?: string | null;
+  restaurantId?: string | null;
   items: OrderItemInput[];
 }
 

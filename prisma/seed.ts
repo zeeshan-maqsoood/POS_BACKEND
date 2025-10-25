@@ -88,11 +88,11 @@ const managerUsers = [
     branch: 'Westside Branch'
   },
   {
-    email: 'manager.eastside@example.com',
-    password: 'manager123',
-    name: 'Eastside Branch Manager',
-    role: UserRole.MANAGER,
-    branch: 'Eastside Branch'
+    email: 'restaurant.main@example.com',
+    password: 'restaurant123',
+    name: 'Main Restaurant Manager',
+    role: UserRole.RESTAURANT,
+    restaurant: 'Main Restaurant'
   }
 ];
 

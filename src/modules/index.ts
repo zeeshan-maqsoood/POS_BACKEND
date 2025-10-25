@@ -6,6 +6,7 @@ import orderRoutes from "./orders/order.routes";
 import { dashboardRouter } from "./dashboard/dashboard.routes";
 import receiptRoutes from "./receipt/receipt.routes";
 import branchRoutes from "./branch/branch.routes";
+import { restaurantRoutes } from "./restaurant/restaurant.routes";
 import analyticsRoutes from "./analytics/analytics.routes"
 import reportingRoutes from "./reporting/report.routes"
 import inventoryRoutes from "./inventory/inventory.routes"
@@ -20,6 +21,7 @@ router.use("/products", productRoutes);
 router.use("/menu", menuRoutes);
 router.use("/orders", orderRoutes);
 router.use("/branches", branchRoutes);
+router.use("/restaurants", restaurantRoutes);
 router.use("/dashboard", dashboardRouter);
 router.use("/receipts", receiptRoutes);
 router.use("/analytics", analyticsRoutes);

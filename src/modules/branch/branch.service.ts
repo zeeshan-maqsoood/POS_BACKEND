@@ -2,66 +2,258 @@ import prisma from "../../loaders/prisma";
 
 export interface CreateBranchData {
   name: string;
-  restaurantName: string;
+  restaurantId: string;
+  description?: string;
+  address?: string;
   city?: string;
   state?: string;
+  country?: string;
   postalCode?: string;
+  phone?: string;
+  email?: string;
+  manager?: string;
+  operatingHours?: any;
+  serviceType?: 'DINE_IN' | 'TAKE_AWAY' | 'BOTH';
 }
 
 export interface UpdateBranchData {
   name?: string;
-  restaurantName?: string;
+  restaurantId?: string;
+  description?: string;
+  address?: string;
   city?: string;
   state?: string;
+  country?: string;
   postalCode?: string;
+  phone?: string;
+  email?: string;
+  manager?: string;
+  operatingHours?: any;
   isActive?: boolean;
+  serviceType?: 'DINE_IN' | 'TAKE_AWAY' | 'BOTH';
 }
 
 export const branchService = {
   async createBranch(data: CreateBranchData) {
+    // Verify restaurant exists
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: data.restaurantId }
+    });
+
+    if (!restaurant) {
+      throw new Error('Restaurant not found');
+    }
+
     return await prisma.branch.create({
       data: {
         ...data,
         isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        _count: {
+          select: {
+            users: true,
+            orders: true,
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
+          }
+        }
       }
-    });
+    }).then(branch => ({
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
+    }));
   },
 
   async getAllBranches() {
-    return await prisma.branch.findMany({
-      include: {
+    const branches = await prisma.branch.findMany({
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         _count: {
           select: {
             users: true,
             orders: true,
-            menuItems: true
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
           }
         }
       },
       orderBy: { name: 'asc' }
     });
+
+    return branches.map(branch => ({
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
+    }));
   },
 
   async getActiveBranches() {
-    return await prisma.branch.findMany({
+    const branches = await prisma.branch.findMany({
       where: { isActive: true },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         _count: {
           select: {
             users: true,
             orders: true,
-            menuItems: true
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
           }
         }
       },
       orderBy: { name: 'asc' }
     });
+
+    return branches.map(branch => ({
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
+    }));
   },
 
   async getBranchById(id: string) {
-    return await prisma.branch.findUnique({
+    const branch = await prisma.branch.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        _count: {
+          select: {
+            users: true,
+            orders: true,
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
+          }
+        }
+      }
+    });
+
+    if (!branch) return null;
+
+    return {
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
+    };
+  },
+
+  async getBranchByName(name: string) {
+    return await prisma.branch.findUnique({
+      where: { name },
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         _count: {
           select: {
             users: true,
@@ -75,43 +267,97 @@ export const branchService = {
     });
   },
 
-  async getBranchByName(name: string) {
-    return await prisma.branch.findUnique({
-      where: { name },
-      include: {
-        _count: {
-          select: {
-            users: true,
-            orders: true,
-            menuItems: true
-          }
-        }
-      }
-    });
-  },
-
   async updateBranch(id: string, data: UpdateBranchData) {
-    return await prisma.branch.update({
+    const branch = await prisma.branch.update({
       where: { id },
       data,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         _count: {
           select: {
             users: true,
             orders: true,
-            menuItems: true
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
           }
         }
       }
     });
+
+    return {
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
+    };
   },
 
   async deleteBranch(id: string) {
     // Soft delete - set isActive to false
-    return await prisma.branch.update({
+    const branch = await prisma.branch.update({
       where: { id },
-      data: { isActive: false }
+      data: { isActive: false },
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        _count: {
+          select: {
+            users: true,
+            orders: true,
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
+          }
+        }
+      }
     });
+
+    return {
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
+    };
   },
 
   async getUserBranches(userId: string) {
@@ -131,18 +377,13 @@ export const branchService = {
         id: branch.id,
         name: branch.name,
         value: branch.name,
-        restaurantName: branch.restaurantName
+        restaurantName: branch.restaurant?.name || 'No Restaurant'
       }));
     }
 
     // For other roles, return their assigned branch if they have one
     if (user.branch) {
-      return [{
-        id: user.branch.id,
-        name: user.branch.name,
-        value: user.branch.name,
-        restaurantName: user.branch.restaurantName
-      }];
+      return [user.branch];
     }
 
     return [];
@@ -154,14 +395,75 @@ export const branchService = {
       id: branch.id,
       name: branch.name,
       value: branch.name,
-      restaurantName: branch.restaurantName
+      restaurantName: branch.restaurant?.name || 'No Restaurant'
+    }));
+  },
+
+  async getBranchesByRestaurant(restaurantId: string) {
+    const branches = await prisma.branch.findMany({
+      where: {
+        restaurantId: restaurantId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        restaurantId: true,
+        description: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        postalCode: true,
+        phone: true,
+        email: true,
+        manager: true,
+        isActive: true,
+        operatingHours: true,
+        createdAt: true,
+        updatedAt: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        _count: {
+          select: {
+            users: true,
+            orders: true,
+            menuItems: true,
+            shifts: true,
+            inventoryItems: true
+          }
+        }
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    return branches.map(branch => ({
+      ...branch,
+      restaurantName: branch.restaurant?.name || null
     }));
   },
 
   async getBranchStats(branchId: string) {
     const branch = await prisma.branch.findUnique({
       where: { id: branchId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        serviceType: true,
+        isActive: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         _count: {
           select: {
             users: true,
@@ -197,7 +499,8 @@ export const branchService = {
     return {
       id: branch.id,
       name: branch.name,
-      restaurantName: branch.restaurantName,
+      serviceType: branch.serviceType,
+      restaurantName: branch.restaurant?.name || 'No Restaurant',
       isActive: branch.isActive,
       stats: {
         totalUsers: branch._count.users,
