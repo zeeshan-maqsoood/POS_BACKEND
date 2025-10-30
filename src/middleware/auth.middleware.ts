@@ -1,8 +1,8 @@
 import { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { hasPermission, JwtPayload, Permission } from "../types/auth.types";
-import { UserRole } from "@prisma/client";
+import { hasPermission, JwtPayload } from "../types/auth.types";
+import { UserRole, Permission } from "@prisma/client";
 
 // Extend Express types
 declare global {
@@ -56,6 +56,7 @@ export const authenticateJWT: RequestHandler = (req, res, next) => {
     email: decoded.email,
     role: decoded.role,
     branch: decoded.branch,
+    branchId:decoded.branchId||(decoded.branch),
     permissions: decoded.permissions || [],
     iat: decoded.iat,
     exp: decoded.exp,
@@ -84,7 +85,7 @@ export const checkRole = (roles: UserRole[]): RequestHandler => {
 /**
  * 🔑 Permission-based Access Middleware
  */
-export const checkPermission = (permissions: Permission[]): RequestHandler => {
+export const checkPermission = (permissions: string[]): RequestHandler => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ message: "Not authenticated" });

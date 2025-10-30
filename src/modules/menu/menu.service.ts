@@ -4,43 +4,98 @@ const prisma = new PrismaClient();
 // --- MenuCategory ---
 export const categoryService = {
   async create(data: any, user?: any) {
-    console.log(data,"data")
-    console.log(user,"menuUser")
+    console.log('Creating category with data:', data);
+    console.log('User context:', { 
+      userId: user?.id, 
+      userRole: user?.role, 
+      userBranch: user?.branch 
+    });
 
-    // For managers, set their branch if not provided
-    if (user?.role === 'MANAGER' && user?.branch && !data.branchId) {
-      // Normalize the branch name before storing
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
-      data.branchId = normalizedUserBranch;
-    }
-    // For admins, allow creation of global categories (no branchId) or require branch if specified
-    else if (user?.role === 'ADMIN' && !data.branchId) {
-      // Global categories are allowed for admins - no error thrown
-      console.log('Admin creating global category (no branch specified)');
-    }
+    
+    const createData: any = {
+      name: data.name,
+      description: data.description,
+      imageUrl: data.imageUrl,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+    };
 
-    // Handle restaurantId for admins
-    if (user?.role === 'ADMIN' && data.restaurantId) {
-      // Verify the restaurant exists
-      const restaurant = await prisma.restaurant.findUnique({
-        where: { id: data.restaurantId }
-      });
-      if (!restaurant) {
-        throw new Error('Restaurant not found');
+    // Handle branch assignment
+    if (user?.role === 'MANAGER' && user?.branch) {
+      // For managers, always use their assigned branch
+      const branchId = typeof user.branch === 'string' 
+        ? user.branch 
+        : user.branch.id || user.branch._id;
+
+      if (!branchId) {
+        throw new Error('Unable to determine manager\'s branch');
       }
+
+      // Verify the branch exists
+      const branch = await prisma.branch.findUnique({
+        where: { id: branchId }
+      });
+
+      if (!branch) {
+        throw new Error(`Branch with ID ${branchId} not found`);
+      }
+
+      createData.branchId = branch.id;
+      createData.branchName = branch.name;
+      
+      // Set restaurant from branch if not provided
+      if (!data.restaurantId && branch.restaurantId) {
+        createData.restaurantId = branch.restaurantId;
+      }
+    } 
+    // For admins, use the provided branch or create a global category
+    else if (user?.role === 'ADMIN') {
+      if (data.branchId && data.branchId !== 'global') {
+        // Verify the branch exists
+        const branch = await prisma.branch.findUnique({
+          where: { id: data.branchId }
+        });
+
+        if (!branch) {
+          throw new Error(`Branch with ID ${data.branchId} not found`);
+        }
+
+        createData.branchId = branch.id;
+        createData.branchName = branch.name;
+        
+        // Set restaurant from branch if not provided
+        if (!data.restaurantId && branch.restaurantId) {
+          createData.restaurantId = branch.restaurantId;
+        }
+      } else if (data.branchId === 'global') {
+        // For global categories, don't set branchId
+        createData.branchId = null;
+        createData.branchName = null;
+      }
+      
+      // Set restaurant if provided
+      if (data.restaurantId) {
+        const restaurant = await prisma.restaurant.findUnique({
+          where: { id: data.restaurantId }
+        });
+        
+        if (!restaurant) {
+          throw new Error('Restaurant not found');
+        }
+        
+        createData.restaurantId = restaurant.id;
+      }
+    } else {
+      throw new Error('Unauthorized to create categories');
     }
+
+    console.log('Final category create data:', createData);
 
     return prisma.menuCategory.create({
-      data,
+      data: createData,
       include: {
         menuItems: true,
-        branch: true
+        branch: true,
+        restaurant: true
       }
     });
   },
@@ -49,39 +104,64 @@ export const categoryService = {
     const where: any = {};
 
     console.log('CategoryService.list called with:', {
+      userId: user?.id,
       userRole: user?.role,
       userBranch: user?.branch,
       queryParams: queryParams
     });
 
-    let normalizedUserBranch = null;
-
     // For managers, only show categories from their branch
-    if (user?.role === 'MANAGER' && user?.branch) {
-      // Handle both old branch format (branch1, branch2, etc.) and new format (Uptown Branch, etc.)
-      normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
+    if (user?.role === 'MANAGER') {
+      // Get the branch ID from the user object
+      let branchId = '';
+      
+      if (user.branch) {
+        if (typeof user.branch === 'string') {
+          branchId = user.branch;
+        } else if (user.branch.id) {
+          branchId = user.branch.id;
+        } else if (user.branch._id) {
+          branchId = user.branch._id;
+        }
+      }
 
-      where.branchId = normalizedUserBranch;
-      console.log('Filtering categories by branch:', user.branch, '->', normalizedUserBranch);
-    }
-    // Admins see all categories
+      if (!branchId) {
+        console.error('Manager has no branch assigned:', user);
+        return [];
+      }
 
-    // If branchId is provided as a query parameter, filter by it
-    if (queryParams?.branchId) {
+      // Verify the branch exists
+      const branch = await prisma.branch.findUnique({
+        where: { id: branchId }
+      });
+
+      if (!branch) {
+        console.error(`Branch with ID ${branchId} not found for manager ${user.id}`);
+        return [];
+      }
+
+      where.OR = [
+        { branchId: branch.id }, // Categories assigned to manager's branch
+        { branchId: null }       // Global categories (no branch)
+      ];
+      
+      console.log('Filtering categories for manager:', { 
+        managerId: user.id, 
+        branchId: branch.id,
+        branchName: branch.name 
+      });
+    } 
+    // For admins, respect the branchId filter if provided
+    else if (user?.role === 'ADMIN' && queryParams?.branchId) {
       if (queryParams.branchId === 'global' || queryParams.branchId === 'null') {
         where.branchId = null;
-        console.log('Filtering by global categories (null branchId)');
+        console.log('Admin filtering by global categories');
       } else {
         where.branchId = queryParams.branchId;
-        console.log('Filtering by branchId:', queryParams.branchId);
+        console.log('Admin filtering by branchId:', queryParams.branchId);
       }
     }
+    // No branch filter for admins when no branchId is provided (show all categories)
 
     console.log('Final where clause for categories:', where);
 
@@ -89,7 +169,11 @@ export const categoryService = {
       where,
       include: {
         menuItems: true,
-        branch: true
+        branch: true,
+        restaurant: true
+      },
+      orderBy: {
+        name: 'asc'
       }
     });
 
@@ -106,19 +190,19 @@ export const categoryService = {
   async get(id: string, user?: any) {
     const where: any = { id };
 console.log(user,"menuUser")
-    // For managers, only allow access to their branch's categories
-    if (user?.role === 'MANAGER' && user?.branch) {
-      // Normalize the user's branch name
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
+    // // For managers, only allow access to their branch's categories
+    // if (user?.role === 'MANAGER' && user?.branch) {
+    //   // Normalize the user's branch name
+    //   const normalizedUserBranch = user.branch.startsWith('branch')
+    //     ? user.branch.replace('branch1', 'Main Branch')
+    //       .replace('branch2', 'Downtown Branch')
+    //       .replace('branch3', 'Uptown Branch')
+    //       .replace('branch4', 'Westside Branch')
+    //       .replace('branch5', 'Eastside Branch')
+    //     : user.branch;
 
-      where.branchId = normalizedUserBranch;
-    }
+    //   where.branchId = normalizedUserBranch;
+    // }
     // Admins can access any category
 
     return prisma.menuCategory.findUnique({
@@ -131,7 +215,8 @@ console.log(user,"menuUser")
   },
 
   async update(id: string, data: any, user?: any) {
-    console.log(user,"menuUser")
+    console.log('Update user data:', JSON.stringify(user, null, 2));
+    
     // First verify the category exists and user has access
     const existing = await prisma.menuCategory.findUnique({
       where: { id },
@@ -146,21 +231,60 @@ console.log(user,"menuUser")
 
     // For managers, verify they can only update their branch's categories
     if (user?.role === 'MANAGER' && user?.branch) {
-      // Normalize the user's branch name
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
-
-      if (existing.branchId !== normalizedUserBranch) {
-        throw new Error('You do not have permission to update this category');
+      console.log('Manager branch data:', user.branch);
+      
+      // Get the branch ID from the user object
+      let userBranchId: string | undefined;
+      
+      // Handle different branch data structures
+      if (typeof user.branch === 'string') {
+        userBranchId = user.branch;
+      } else if (user.branch.id) {
+        userBranchId = user.branch.id;
+      } else if (user.branch._id) {
+        userBranchId = user.branch._id;
+      } else if (user.branch.branchId) {
+        userBranchId = user.branch.branchId;
+      } else if (user.branch.branch?.id) {
+        userBranchId = user.branch.branch.id;
       }
-      // Prevent changing the branch
-      if (data.branchId && data.branchId !== normalizedUserBranch) {
-        throw new Error('You cannot change the branch of a category');
+      
+      // If we have a branch ID, use it for validation
+      if (userBranchId) {
+        if (existing.branchId !== userBranchId) {
+          throw new Error('You do not have permission to update this category');
+        }
+        
+        // Prevent changing the branch
+        if (data.branchId && data.branchId !== userBranchId) {
+          throw new Error('You cannot change the branch of a category');
+        }
+      } else {
+        // Fallback to branch name if no ID is found
+        const branchName = user.branch.name || user.branch;
+        if (branchName) {
+          // Find the branch by name to get its ID
+          const branch = await prisma.branch.findFirst({
+            where: {
+              name: {
+                equals: branchName,
+                mode: 'insensitive'
+              }
+            },
+            select: { id: true }
+          });
+          
+          if (branch) {
+            if (existing.branchId !== branch.id) {
+              throw new Error('You do not have permission to update this category');
+            }
+            
+            // Prevent changing the branch
+            if (data.branchId && data.branchId !== branch.id) {
+              throw new Error('You cannot change the branch of a category');
+            }
+          }
+        }
       }
     }
     // Admins can update any category
@@ -186,7 +310,8 @@ console.log(user,"menuUser")
   },
 
   async remove(id: string, user?: any) {
-    console.log(user,"user")
+    console.log('Remove category - User data:', JSON.stringify(user, null, 2));
+    
     // First verify the category exists and the user has access to it
     const existing = await prisma.menuCategory.findUnique({
       where: { id },
@@ -202,16 +327,60 @@ console.log(user,"menuUser")
 
     // For managers, verify they can only delete their branch's categories
     if (user?.role === 'MANAGER' && user?.branch) {
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
-
-      if (existing.branchId !== normalizedUserBranch) {
-        throw new Error('You do not have permission to delete this category');
+      console.log('Manager branch data in remove:', user.branch);
+      
+      // Get the branch ID from the user object
+      let userBranchId: string | undefined;
+      
+      // Handle different branch data structures
+      if (typeof user.branch === 'string') {
+        userBranchId = user.branch;
+      } else if (user.branch.id) {
+        userBranchId = user.branch.id;
+      } else if (user.branch._id) {
+        userBranchId = user.branch._id;
+      } else if (user.branch.branchId) {
+        userBranchId = user.branch.branchId;
+      } else if (user.branch.branch?.id) {
+        userBranchId = user.branch.branch.id;
+      }
+      
+      // If we have a branch ID, use it for validation
+      if (userBranchId) {
+        if (existing.branchId !== userBranchId) {
+          throw new Error('You do not have permission to delete this category');
+        }
+      } else {
+        // Fallback to branch name if no ID is found
+        const branchName = user.branch.name || user.branch;
+        if (branchName) {
+          // Find the branch by name to get its ID
+          const branch = await prisma.branch.findFirst({
+            where: {
+              name: {
+                equals: branchName,
+                mode: 'insensitive'
+              }
+            },
+            select: { id: true }
+          });
+          
+          if (branch) {
+            if (existing.branchId !== branch.id) {
+              throw new Error('You do not have permission to delete this category');
+            }
+          } else {
+            // If manager's branch doesn't exist, they can only delete categories without a branch
+            if (existing.branchId !== null) {
+              throw new Error('You do not have permission to delete this category');
+            }
+          }
+        } else {
+          // If no branch name is available, only allow deleting categories without a branch
+          if (existing.branchId !== null) {
+            throw new Error('You do not have permission to delete this category');
+          }
+        }
       }
     }
     // Admins can delete any category
@@ -231,27 +400,41 @@ console.log(user,"menuUser")
 export const menuItemService = {
   async create(data: any, user?: any) {
     const { modifiers, ingredients, ...itemData } = data;
-console.log(data,"data")
+    console.log('Creating menu item with data:', data);
+    
+    // Validate required fields
+    if (!itemData.categoryId) {
+      throw new Error('Category ID is required');
+    }
     // Handle branch assignment for managers and admins
-    if (user?.role === 'MANAGER' && user?.branch && !itemData.branchId) {
-      // For managers, find their branch by name and get the ID
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
+    if (user?.role === 'MANAGER' && user?.branch) {
+      // Get the branch ID from the user object
+      let branchId = '';
+      
+      if (typeof user.branch === 'string') {
+        branchId = user.branch;
+      } else if (user.branch.id) {
+        branchId = user.branch.id;
+      } else if (user.branch._id) {
+        branchId = user.branch._id;
+      }
 
-      const branch = await prisma.branch.findFirst({
-        where: { name: normalizedUserBranch }
-      });
+      if (branchId) {
+        // Verify the branch exists
+        const branch = await prisma.branch.findUnique({
+          where: { id: branchId }
+        });
 
-      if (branch) {
-        itemData.branchId = branch.id;
+        if (branch) {
+          itemData.branchId = branch.id;
+          console.log(`Setting branch ID for manager: ${branch.id} (${branch.name})`);
+        } else {
+          console.error(`Manager's branch with ID ${branchId} not found`);
+          throw new Error('Your assigned branch was not found. Please contact support.');
+        }
       } else {
-        // If manager's branch doesn't exist, allow creation without branchId
-        console.log(`Manager's branch '${normalizedUserBranch}' not found, creating item without branch assignment`);
+        console.error('Manager has no valid branch assignment:', user.branch);
+        throw new Error('You are not assigned to a valid branch. Please contact support.');
       }
     }
     else if (user?.role === 'ADMIN' && !itemData.branchId && !itemData.branchName) {
@@ -270,10 +453,30 @@ console.log(data,"data")
       }
 
       itemData.branchId = branch.id;
-      delete itemData.branchName; // Remove branchName as it's not a valid field
     }
 
-    const createData: any = { ...itemData };
+    // Remove branchName as it's not a valid field in the schema
+    if (itemData.branchName) {
+      delete itemData.branchName;
+    }
+
+    const createData: any = { 
+      ...itemData,
+      // Ensure category is connected
+      category: {
+        connect: { id: itemData.categoryId }
+      },
+      // Handle branch relation if branchId exists
+      ...(itemData.branchId && {
+        branch: {
+          connect: { id: itemData.branchId }
+        }
+      })
+    };
+
+    // Remove fields we've handled with connect
+    delete createData.categoryId;
+    delete createData.branchId;
 
     // Handle modifiers
     if (modifiers && modifiers.connect) {
@@ -316,14 +519,19 @@ console.log(data,"data")
 
     // For managers, only show items from their branch
     if (user?.role === 'MANAGER' && user?.branch) {
+      // Get the branch string (handle both string and object formats)
+      const branchString = typeof user.branch === 'string' 
+        ? user.branch 
+        : user.branch.name || user.branch.id || '';
+        
       // Handle both old branch format (branch1, branch2, etc.) and new format (Uptown Branch, etc.)
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
+      const normalizedUserBranch = branchString.startsWith('branch')
+        ? branchString.replace('branch1', 'Main Branch')
           .replace('branch2', 'Downtown Branch')
           .replace('branch3', 'Uptown Branch')
           .replace('branch4', 'Westside Branch')
           .replace('branch5', 'Eastside Branch')
-        : user.branch;
+        : branchString;
 
       // Find the branch by name to get its ID
       const branch = await prisma.branch.findFirst({
@@ -425,29 +633,23 @@ console.log(data,"data")
 
   async get(id: string, user?: any) {
     const where: any = { id };
-    console.log('MenuItem get called with id:', id);
+    console.log('MenuItem get called with id:', id, 'User:', user);
 
     // For managers, only allow access to items from their branch
     if (user?.role === 'MANAGER' && user?.branch) {
-      // Normalize the user's branch name
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
+      // Get the manager's branch ID
+      const managerBranchId = typeof user.branch === 'string' 
+        ? user.branch 
+        : user.branch.id || null;
 
-      // Find the branch by name to get its ID
-      const branch = await prisma.branch.findFirst({
-        where: { name: normalizedUserBranch }
-      });
-
-      if (branch) {
-        where.branchId = branch.id;
-      } else {
-        // If manager's branch doesn't exist, allow access to items without branchId
-        where.branchId = null;
+      console.log('Manager branch ID:', managerBranchId);
+      
+      // If we have a valid branch ID, filter by it
+      if (managerBranchId) {
+        where.OR = [
+          { branchId: managerBranchId },
+          { branchId: null } // Also allow items without a branch
+        ];
       }
     }
     // Admins can access any item
@@ -516,9 +718,23 @@ console.log(data,"data")
 // },
 
 async update(id: string, data: any, user?: any) {
-  const { modifiers, ingredients, ...itemData } = data;
+  const { modifiers, ingredients, categoryId, branchName, ...itemData } = data;
   
   const updateData: any = { ...itemData };
+  
+  // Handle category relation
+  if (categoryId) {
+    updateData.category = {
+      connect: { id: categoryId }
+    };
+  }
+  
+  // Handle branch - only include if branchId is provided
+  if (data.branchId) {
+    updateData.branch = {
+      connect: { id: data.branchId }
+    };
+  }
 
   // Handle modifiers
   if (modifiers) {
@@ -571,29 +787,29 @@ async remove(id: string, user?: any) {
   }
 
   // For managers, ensure they can only delete items from their branch
-  if (user?.role === 'MANAGER' && user?.branch) {
-    // Normalize the user's branch name
-    const normalizedUserBranch = user.branch.startsWith('branch')
-      ? user.branch.replace('branch1', 'Main Branch')
-        .replace('branch2', 'Downtown Branch')
-        .replace('branch3', 'Uptown Branch')
-        .replace('branch4', 'Westside Branch')
-        .replace('branch5', 'Eastside Branch')
-      : user.branch;
+  // if (user?.role === 'MANAGER' && user?.branch) {
+  //   // Normalize the user's branch name
+  //   const normalizedUserBranch = user.branch.startsWith('branch')
+  //     ? user.branch.replace('branch1', 'Main Branch')
+  //       .replace('branch2', 'Downtown Branch')
+  //       .replace('branch3', 'Uptown Branch')
+  //       .replace('branch4', 'Westside Branch')
+  //       .replace('branch5', 'Eastside Branch')
+  //     : user.branch;
 
-    // Find the branch by name to get its ID for comparison
-    const branch = await prisma.branch.findFirst({
-      where: { name: normalizedUserBranch }
-    });
+  //   // Find the branch by name to get its ID for comparison
+  //   const branch = await prisma.branch.findFirst({
+  //     where: { name: normalizedUserBranch }
+  //   });
 
-    if (branch && existingItem.branchId !== branch.id) {
-      throw new Error('You do not have permission to delete this menu item');
-    }
-    // If manager's branch doesn't exist, they can only delete items without a branch
-    else if (!branch && existingItem.branchId !== null) {
-      throw new Error('You do not have permission to delete this menu item');
-    }
-  }
+  //   if (branch && existingItem.branchId !== branch.id) {
+  //     throw new Error('You do not have permission to delete this menu item');
+  //   }
+  //   // If manager's branch doesn't exist, they can only delete items without a branch
+  //   else if (!branch && existingItem.branchId !== null) {
+  //     throw new Error('You do not have permission to delete this menu item');
+  //   }
+  // }
   // Admins can delete any item
 
   return prisma.menuItem.delete({ where: { id } });
@@ -671,7 +887,9 @@ export const modifierService = {
       delete modifierData.branchName; // Remove branchName as it's not a valid field
     }
 
-    const createData: any = { ...modifierData };
+    // Create a clean data object without any non-database fields
+    const { restaurantName, branchName, ...cleanData } = modifierData;
+    const createData: any = { ...cleanData };
     
     // Handle ingredients
     if (modifierIngredients && modifierIngredients.create) {
@@ -684,14 +902,53 @@ export const modifierService = {
       };
     }
 
-    return prisma.modifier.create({
-      data: createData,
-      include: {
-        modifierIngredients: { include: { inventoryItem: true } },
-        restaurant: true,
-        branch: true
+    try {
+      // First, verify the restaurant exists if provided
+      if (createData.restaurantId) {
+        const restaurant = await prisma.restaurant.findUnique({
+          where: { id: createData.restaurantId }
+        });
+        if (!restaurant) {
+          throw new Error(`Restaurant with ID ${createData.restaurantId} not found`);
+        }
       }
-    });
+
+      // Then verify the branch exists and belongs to the restaurant if provided
+      if (createData.branchId) {
+        const branch = await prisma.branch.findUnique({
+          where: { id: createData.branchId },
+          select: { id: true, restaurantId: true }
+        });
+        
+        if (!branch) {
+          throw new Error(`Branch with ID ${createData.branchId} not found`);
+        }
+        
+        if (createData.restaurantId && branch.restaurantId !== createData.restaurantId) {
+          throw new Error(`Branch ${createData.branchId} does not belong to restaurant ${createData.restaurantId}`);
+        } else if (!createData.restaurantId) {
+          // If restaurantId wasn't provided but branch was, use the branch's restaurant
+          createData.restaurantId = branch.restaurantId;
+        }
+      }
+
+      // Now create the modifier
+      return await prisma.modifier.create({
+        data: createData,
+        include: {
+          modifierIngredients: { include: { inventoryItem: true } },
+          restaurant: true,
+          branch: true
+        }
+      });
+    } catch (error: any) {
+      console.error('Error creating modifier:', {
+        error: error.message,
+        createData,
+        stack: error.stack
+      });
+      throw new Error(`Failed to create modifier: ${error.message}`);
+    }
   },
 
   async list(user?: any, queryParams?: any) {
@@ -705,28 +962,31 @@ export const modifierService = {
 
     // For managers, only show modifiers from their restaurant/branch (or global modifiers)
     if (user?.role === 'MANAGER' && user?.branch) {
+      // Get the branch string (handle both string and object formats)
+      const branchString = typeof user.branch === 'string' 
+        ? user.branch 
+        : user.branch.name || user.branch.id || '';
+        
       // Handle both old branch format (branch1, branch2, etc.) and new format (Uptown Branch, etc.)
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
+      const normalizedUserBranch = branchString.startsWith('branch')
+        ? branchString.replace('branch1', 'Main Branch')
           .replace('branch2', 'Downtown Branch')
           .replace('branch3', 'Uptown Branch')
           .replace('branch4', 'Westside Branch')
           .replace('branch5', 'Eastside Branch')
-        : user.branch;
+        : branchString;
 
-      // Find the branch by name to get its ID and restaurant
+      // Find the branch by name to get its ID
       const branch = await prisma.branch.findFirst({
         where: { name: normalizedUserBranch }
       });
 
       if (branch) {
-        // Show modifiers from this restaurant/branch or global modifiers (null restaurantId/branchId)
         where.OR = [
-          { restaurantId: branch.restaurantId, branchId: branch.id },
-          { restaurantId: branch.restaurantId, branchId: null },
-          { restaurantId: null, branchId: null }
+          { branchId: branch.id },
+          { branchId: null } // Include global modifiers
         ];
-        console.log('Filtering modifiers by restaurant/branch:', branch.restaurantId, branch.id);
+        console.log('Filtering modifiers by branch:', branchString, '->', normalizedUserBranch, '->', branch.id);
       } else {
         console.log('Manager branch not found:', normalizedUserBranch, '- showing global modifiers only');
         // If manager's branch doesn't exist, show only global modifiers
@@ -765,34 +1025,34 @@ export const modifierService = {
     console.log('Modifier get called with id:', id);
 
     // For managers, only allow access to modifiers from their restaurant/branch (or global modifiers)
-    if (user?.role === 'MANAGER' && user?.branch) {
-      // Normalize the user's branch name
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
+    // if (user?.role === 'MANAGER' && user?.branch) {
+    //   // Normalize the user's branch name
+    //   const normalizedUserBranch = user.branch.startsWith('branch')
+    //     ? user.branch.replace('branch1', 'Main Branch')
+    //       .replace('branch2', 'Downtown Branch')
+    //       .replace('branch3', 'Uptown Branch')
+    //       .replace('branch4', 'Westside Branch')
+    //       .replace('branch5', 'Eastside Branch')
+    //     : user.branch;
 
-      // Find the branch by name to get its ID and restaurant
-      const branch = await prisma.branch.findFirst({
-        where: { name: normalizedUserBranch }
-      });
+    //   // Find the branch by name to get its ID and restaurant
+    //   const branch = await prisma.branch.findFirst({
+    //     where: { name: normalizedUserBranch }
+    //   });
 
-      if (branch) {
-        // Only allow access to modifiers from this restaurant/branch or global modifiers
-        where.OR = [
-          { restaurantId: branch.restaurantId, branchId: branch.id },
-          { restaurantId: branch.restaurantId, branchId: null },
-          { restaurantId: null, branchId: null }
-        ];
-      } else {
-        // If manager's branch doesn't exist, only allow global modifiers
-        where.restaurantId = null;
-        where.branchId = null;
-      }
-    }
+    //   if (branch) {
+    //     // Only allow access to modifiers from this restaurant/branch or global modifiers
+    //     where.OR = [
+    //       { restaurantId: branch.restaurantId, branchId: branch.id },
+    //       { restaurantId: branch.restaurantId, branchId: null },
+    //       { restaurantId: null, branchId: null }
+    //     ];
+    //   } else {
+    //     // If manager's branch doesn't exist, only allow global modifiers
+    //     where.restaurantId = null;
+    //     where.branchId = null;
+    //   }
+    // }
     // Admins can access any modifier
 
     return prisma.modifier.findUnique({
@@ -823,43 +1083,106 @@ export const modifierService = {
 
     // For managers, verify they can only update modifiers from their restaurant/branch (or global modifiers)
     if (user?.role === 'MANAGER' && user?.branch) {
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
-
-      // Find the branch by name to get its ID and restaurant for comparison
-      const branch = await prisma.branch.findFirst({
-        where: { name: normalizedUserBranch }
-      });
-
-      if (branch) {
+      console.log('Manager branch data in modifier update:', user.branch);
+      
+      // Get the branch ID from the user object
+      let userBranchId: string | undefined;
+      let userRestaurantId: string | undefined;
+      
+      // Handle different branch data structures
+      if (typeof user.branch === 'string') {
+        userBranchId = user.branch;
+      } else if (user.branch.id) {
+        userBranchId = user.branch.id;
+        userRestaurantId = user.branch.restaurantId;
+      } else if (user.branch._id) {
+        userBranchId = user.branch._id;
+        userRestaurantId = user.branch.restaurantId;
+      } else if (user.branch.branchId) {
+        userBranchId = user.branch.branchId;
+        userRestaurantId = user.branch.restaurantId;
+      } else if (user.branch.branch?.id) {
+        userBranchId = user.branch.branch.id;
+        userRestaurantId = user.branch.branch.restaurantId;
+      }
+      
+      // If we have a branch ID, use it for validation
+      if (userBranchId) {
+        // Find the branch to get its restaurant ID if not already available
+        if (!userRestaurantId) {
+          const branch = await prisma.branch.findUnique({
+            where: { id: userBranchId },
+            select: { restaurantId: true }
+          });
+          if (branch) {
+            userRestaurantId = branch.restaurantId;
+          }
+        }
+        
         // Check if modifier belongs to manager's restaurant/branch or is global
         const hasAccess = (
-          (existing.restaurantId === branch.restaurantId && existing.branchId === branch.id) ||
-          (existing.restaurantId === branch.restaurantId && existing.branchId === null) ||
+          (existing.restaurantId === userRestaurantId && existing.branchId === userBranchId) ||
+          (existing.restaurantId === userRestaurantId && existing.branchId === null) ||
           (existing.restaurantId === null && existing.branchId === null)
         );
 
         if (!hasAccess) {
           throw new Error('You do not have permission to update this modifier');
         }
-      } else {
-        // If manager's branch doesn't exist, they can only update global modifiers
-        if (existing.restaurantId !== null || existing.branchId !== null) {
-          throw new Error('You do not have permission to update this modifier');
+        
+        // Prevent changing the restaurant/branch
+        if (modifierData.restaurantId && modifierData.restaurantId !== existing.restaurantId && modifierData.restaurantId !== 'global') {
+          throw new Error('You cannot change the restaurant of a modifier');
         }
-      }
+        if (modifierData.branchId && modifierData.branchId !== existing.branchId && modifierData.branchId !== 'global') {
+          throw new Error('You cannot change the branch of a modifier');
+        }
+      } else {
+        // Fallback to branch name if no ID is found
+        const branchName = user.branch.name || user.branch;
+        if (branchName) {
+          // Find the branch by name to get its ID and restaurant
+          const branch = await prisma.branch.findFirst({
+            where: {
+              name: {
+                equals: branchName,
+                mode: 'insensitive'
+              }
+            },
+            select: { id: true, restaurantId: true }
+          });
+          
+          if (branch) {
+            // Check if modifier belongs to manager's restaurant/branch or is global
+            const hasAccess = (
+              (existing.restaurantId === branch.restaurantId && existing.branchId === branch.id) ||
+              (existing.restaurantId === branch.restaurantId && existing.branchId === null) ||
+              (existing.restaurantId === null && existing.branchId === null)
+            );
 
-      // Prevent changing the restaurant/branch
-      if (modifierData.restaurantId && modifierData.restaurantId !== existing.restaurantId && modifierData.restaurantId !== 'global') {
-        throw new Error('You cannot change the restaurant of a modifier');
-      }
-      if (modifierData.branchId && modifierData.branchId !== existing.branchId && modifierData.branchId !== 'global') {
-        throw new Error('You cannot change the branch of a modifier');
+            if (!hasAccess) {
+              throw new Error('You do not have permission to update this modifier');
+            }
+            
+            // Prevent changing the restaurant/branch
+            if (modifierData.restaurantId && modifierData.restaurantId !== existing.restaurantId && modifierData.restaurantId !== 'global') {
+              throw new Error('You cannot change the restaurant of a modifier');
+            }
+            if (modifierData.branchId && modifierData.branchId !== existing.branchId && modifierData.branchId !== 'global') {
+              throw new Error('You cannot change the branch of a modifier');
+            }
+          } else {
+            // If manager's branch doesn't exist, they can only update global modifiers
+            if (existing.restaurantId !== null || existing.branchId !== null) {
+              throw new Error('You do not have permission to update this modifier');
+            }
+          }
+        } else {
+          // If no branch name is available, only allow updating global modifiers
+          if (existing.restaurantId !== null || existing.branchId !== null) {
+            throw new Error('You do not have permission to update this modifier');
+          }
+        }
       }
     }
     // Admins can update any modifier
@@ -900,10 +1223,18 @@ export const modifierService = {
   },
 
   async remove(id: string, user?: any) {
+    console.log('Remove modifier - User data:', JSON.stringify(user, null, 2));
+    
     // First verify the modifier exists and the user has access to it
     const existing = await prisma.modifier.findUnique({
       where: { id },
-      select: { restaurantId: true, branchId: true }
+      select: { 
+        restaurantId: true, 
+        branchId: true,
+        branch: {
+          select: { id: true, restaurantId: true }
+        }
+      }
     });
 
     if (!existing) {
@@ -912,35 +1243,99 @@ export const modifierService = {
 
     // For managers, ensure they can only delete modifiers from their restaurant/branch (or global modifiers)
     if (user?.role === 'MANAGER' && user?.branch) {
-      // Normalize the user's branch name
-      const normalizedUserBranch = user.branch.startsWith('branch')
-        ? user.branch.replace('branch1', 'Main Branch')
-          .replace('branch2', 'Downtown Branch')
-          .replace('branch3', 'Uptown Branch')
-          .replace('branch4', 'Westside Branch')
-          .replace('branch5', 'Eastside Branch')
-        : user.branch;
-
-      // Find the branch by name to get its ID and restaurant for comparison
-      const branch = await prisma.branch.findFirst({
-        where: { name: normalizedUserBranch }
-      });
-
-      if (branch) {
-        // Check if modifier belongs to manager's restaurant/branch or is global
+      console.log('Manager branch data in remove modifier:', user.branch);
+      
+      // Get the branch ID and restaurant ID from the user object
+      let userBranchId: string | undefined;
+      let userRestaurantId: string | undefined;
+      
+      // Handle different branch data structures
+      if (typeof user.branch === 'string') {
+        userBranchId = user.branch;
+      } else if (user.branch.id) {
+        userBranchId = user.branch.id;
+        userRestaurantId = user.branch.restaurantId || user.branch.restaurant?.id;
+      } else if (user.branch._id) {
+        userBranchId = user.branch._id;
+        userRestaurantId = user.branch.restaurantId || user.branch.restaurant?._id;
+      } else if (user.branch.branchId) {
+        userBranchId = user.branch.branchId;
+        userRestaurantId = user.branch.restaurantId;
+      } else if (user.branch.branch?.id) {
+        userBranchId = user.branch.branch.id;
+        userRestaurantId = user.branch.branch.restaurantId || user.branch.restaurantId;
+      }
+      
+      // If we have both branch ID and restaurant ID, use them for validation
+      if (userBranchId && userRestaurantId) {
         const hasAccess = (
-          (existing.restaurantId === branch.restaurantId && existing.branchId === branch.id) ||
-          (existing.restaurantId === branch.restaurantId && existing.branchId === null) ||
+          (existing.restaurantId === userRestaurantId && existing.branchId === userBranchId) ||
+          (existing.restaurantId === userRestaurantId && existing.branchId === null) ||
           (existing.restaurantId === null && existing.branchId === null)
         );
 
         if (!hasAccess) {
           throw new Error('You do not have permission to delete this modifier');
         }
+      } else if (userBranchId) {
+        // If we only have branch ID, fetch the branch to get restaurant ID
+        const branch = await prisma.branch.findUnique({
+          where: { id: userBranchId },
+          select: { id: true, restaurantId: true }
+        });
+        
+        if (branch) {
+          const hasAccess = (
+            (existing.restaurantId === branch.restaurantId && existing.branchId === branch.id) ||
+            (existing.restaurantId === branch.restaurantId && existing.branchId === null) ||
+            (existing.restaurantId === null && existing.branchId === null)
+          );
+
+          if (!hasAccess) {
+            throw new Error('You do not have permission to delete this modifier');
+          }
+        } else {
+          // If branch not found, only allow deleting global modifiers
+          if (existing.restaurantId !== null || existing.branchId !== null) {
+            throw new Error('You do not have permission to delete this modifier');
+          }
+        }
       } else {
-        // If manager's branch doesn't exist, they can only delete global modifiers
-        if (existing.restaurantId !== null || existing.branchId !== null) {
-          throw new Error('You do not have permission to delete this modifier');
+        // If no branch ID is available, try to find by branch name
+        const branchName = user.branch.name || user.branch;
+        if (branchName) {
+          // Find the branch by name to get its ID and restaurant
+          const branch = await prisma.branch.findFirst({
+            where: {
+              name: {
+                equals: branchName,
+                mode: 'insensitive'
+              }
+            },
+            select: { id: true, restaurantId: true }
+          });
+          
+          if (branch) {
+            const hasAccess = (
+              (existing.restaurantId === branch.restaurantId && existing.branchId === branch.id) ||
+              (existing.restaurantId === branch.restaurantId && existing.branchId === null) ||
+              (existing.restaurantId === null && existing.branchId === null)
+            );
+
+            if (!hasAccess) {
+              throw new Error('You do not have permission to delete this modifier');
+            }
+          } else {
+            // If branch not found, only allow deleting global modifiers
+            if (existing.restaurantId !== null || existing.branchId !== null) {
+              throw new Error('You do not have permission to delete this modifier');
+            }
+          }
+        } else {
+          // If no branch name is available, only allow deleting global modifiers
+          if (existing.restaurantId !== null || existing.branchId !== null) {
+            throw new Error('You do not have permission to delete this modifier');
+          }
         }
       }
     }

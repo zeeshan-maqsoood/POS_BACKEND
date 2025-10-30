@@ -1,7 +1,7 @@
 import { Router } from "express";
 import orderController from "./order.controllers";
 import { authenticateJWT, validateRequest } from "../../middleware/auth.middleware";
-import { createOrderValidator, updateOrderStatusValidator } from "../../middleware/validations/order.validation";
+import { createOrderValidator, updateOrderStatusValidator, updateOrderValidator } from "../../middleware/validations/order.validation";
 
 const router = Router();
 // Apply authentication to all order routes
@@ -29,7 +29,7 @@ router.put(
 // Update order
 router.put(
   "/:id",
-  validateRequest(createOrderValidator), // Reuse the create order validator if it fits, or create a new one
+  validateRequest(updateOrderValidator), // Use the update validator for PUT requests
   orderController.updateOrder
 );
 

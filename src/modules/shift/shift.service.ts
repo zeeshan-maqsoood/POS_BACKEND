@@ -45,8 +45,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       }
@@ -98,8 +97,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       },
@@ -122,8 +120,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       }
@@ -157,8 +154,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       },
@@ -187,8 +183,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       },
@@ -230,8 +225,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       }
@@ -302,8 +296,7 @@ export const shiftService = {
         branch: {
           select: {
             id: true,
-            name: true,
-            restaurantName: true
+            name: true
           }
         }
       },
@@ -324,8 +317,7 @@ export const shiftService = {
       where: { isActive: true },
       select: {
         id: true,
-        name: true,
-        restaurantName: true
+        name: true
       },
       orderBy: { name: 'asc' }
     });

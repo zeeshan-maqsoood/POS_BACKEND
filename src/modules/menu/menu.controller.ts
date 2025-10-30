@@ -49,6 +49,7 @@ export const menuItemController = {
   },
   update: async (req: Request, res: Response) => {
     const item = await menuItemService.update(req.params.id, req.body, req.user);
+    console.log(item,"updatedItem")
     ApiResponse.send(res, ApiResponse.success(item, "Menu item updated successfully"));
   },
   remove: async (req: Request, res: Response) => {

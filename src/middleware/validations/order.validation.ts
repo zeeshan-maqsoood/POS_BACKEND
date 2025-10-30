@@ -92,6 +92,45 @@ export const createOrderValidator = {
   })
 };
 
+// Schema for updating an order (branchName is optional since only admins can change it)
+export const updateOrderValidator = {
+  body: Joi.object({
+    orderType: Joi.string().valid('DINE_IN', 'TAKEAWAY', 'DELIVERY').optional(),
+    tableNumber: Joi.string().optional().allow(''),
+    customerName: Joi.string().optional().allow(''),
+    customerEmail: Joi.string().email({ tlds: { allow: false } }).optional().allow(''),
+    customerPhone: Joi.string().optional().allow(''),
+    items: Joi.array().items(orderItemSchema).optional(),
+    paymentMethod: Joi.string().valid(...paymentMethods).optional(),
+
+    branchName: Joi.string().optional().allow('').messages({
+      'string.base': 'Branch name must be a string'
+    }),
+    restaurantId: Joi.string().optional().allow('').messages({
+      'string.base': 'Restaurant ID must be a string'
+    }),
+    status: Joi.string().valid(...orderStatuses).optional(),
+    paymentStatus: Joi.string().valid(...paymentStatuses).optional(),
+    notes: Joi.string().optional().allow(''),
+    total: Joi.number().min(0).optional().messages({
+      'number.base': 'Total must be a number',
+      'number.min': 'Total must be a positive number'
+    }),
+    subtotal: Joi.number().min(0).optional().messages({
+      'number.base': 'Subtotal must be a number',
+      'number.min': 'Subtotal must be a positive number'
+    }),
+    tax: Joi.number().min(0).optional().messages({
+      'number.base': 'Tax must be a number',
+      'number.min': 'Tax cannot be negative'
+    }),
+    discount: Joi.number().min(0).optional().messages({
+      'number.base': 'Discount must be a number',
+      'number.min': 'Discount cannot be negative'
+    }),
+  })
+};
+
 // Schema for updating order status
 export const updateOrderStatusValidator = {
   body: Joi.object({

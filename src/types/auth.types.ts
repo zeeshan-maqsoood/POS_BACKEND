@@ -1,94 +1,71 @@
 import { UserRole } from '@prisma/client';
 
-// Explicitly type the permissions to ensure they match the Prisma schema
+// Permission constants for easy reference (matches Prisma enum)
 export const PERMISSIONS = {
   // User permissions
-  USER_CREATE: 'USER_CREATE' as const,
-  USER_READ: 'USER_READ' as const,
-  USER_UPDATE: 'USER_UPDATE' as const,
-  USER_DELETE: 'USER_DELETE' as const,
-  
+  USER_CREATE: 'USER_CREATE',
+  USER_READ: 'USER_READ',
+  USER_UPDATE: 'USER_UPDATE',
+  USER_DELETE: 'USER_DELETE',
+
+  // Restaurant permissions
+  RESTAURANT_CREATE: 'RESTAURANT_CREATE',
+  RESTAURANT_READ: 'RESTAURANT_READ',
+  RESTAURANT_UPDATE: 'RESTAURANT_UPDATE',
+  RESTAURANT_DELETE: 'RESTAURANT_DELETE',
+  RESTAURANT_BRANCH_MANAGE: 'RESTAURANT_BRANCH_MANAGE',
+
   // Manager permissions
-  MANAGER_CREATE: 'MANAGER_CREATE' as const,
-  MANAGER_READ: 'MANAGER_READ' as const,
-  MANAGER_UPDATE: 'MANAGER_UPDATE' as const,
-  
+  MANAGER_CREATE: 'MANAGER_CREATE',
+  MANAGER_READ: 'MANAGER_READ',
+  MANAGER_UPDATE: 'MANAGER_UPDATE',
+  MANAGER_DELETE: 'MANAGER_DELETE',
+
   // Order permissions
-  ORDER_CREATE: 'ORDER_CREATE' as const,
-  ORDER_READ: 'ORDER_READ' as const,
-  ORDER_UPDATE: 'ORDER_UPDATE' as const,
-  ORDER_DELETE: 'ORDER_DELETE' as const,
-  
+  ORDER_CREATE: 'ORDER_CREATE',
+  ORDER_READ: 'ORDER_READ',
+  ORDER_UPDATE: 'ORDER_UPDATE',
+  ORDER_DELETE: 'ORDER_DELETE',
+
   // Product permissions
-  PRODUCT_CREATE: 'PRODUCT_CREATE' as const,
-  PRODUCT_READ: 'PRODUCT_READ' as const,
-  PRODUCT_UPDATE: 'PRODUCT_UPDATE' as const,
-  PRODUCT_DELETE: 'PRODUCT_DELETE' as const,
-  
+  PRODUCT_CREATE: 'PRODUCT_CREATE',
+  PRODUCT_READ: 'PRODUCT_READ',
+  PRODUCT_UPDATE: 'PRODUCT_UPDATE',
+  PRODUCT_DELETE: 'PRODUCT_DELETE',
+
   // POS permissions
-  POS_CREATE: 'POS_CREATE' as const,
-  POS_READ: 'POS_READ' as const,
-  POS_UPDATE: 'POS_UPDATE' as const,
-  POS_DELETE: 'POS_DELETE' as const,
+  POS_CREATE: 'POS_CREATE',
+  POS_READ: 'POS_READ',
+  POS_UPDATE: 'POS_UPDATE',
+  POS_DELETE: 'POS_DELETE',
 
   // Menu permissions
-  MENU_CREATE: 'MENU_CREATE' as const,
-  MENU_READ: 'MENU_READ' as const,
-  MENU_UPDATE: 'MENU_UPDATE' as const,
-  MENU_DELETE: 'MENU_DELETE' as const,
+  MENU_CREATE: 'MENU_CREATE',
+  MENU_READ: 'MENU_READ',
+  MENU_UPDATE: 'MENU_UPDATE',
+  MENU_DELETE: 'MENU_DELETE',
 
   // Supplier permissions
-  SUPPLIER_CREATE: 'SUPPLIER_CREATE' as const,
-  SUPPLIER_READ: 'SUPPLIER_READ' as const,
-  SUPPLIER_UPDATE: 'SUPPLIER_UPDATE' as const,
-  SUPPLIER_DELETE: 'SUPPLIER_DELETE' as const,
+  SUPPLIER_CREATE: 'SUPPLIER_CREATE',
+  SUPPLIER_READ: 'SUPPLIER_READ',
+  SUPPLIER_UPDATE: 'SUPPLIER_UPDATE',
+  SUPPLIER_DELETE: 'SUPPLIER_DELETE',
 
   // Purchase Order permissions
-  PURCHASE_ORDER_CREATE: 'PURCHASE_ORDER_CREATE' as const,
-  PURCHASE_ORDER_READ: 'PURCHASE_ORDER_READ' as const,
-  PURCHASE_ORDER_UPDATE: 'PURCHASE_ORDER_UPDATE' as const,
-  PURCHASE_ORDER_DELETE: 'PURCHASE_ORDER_DELETE' as const,
+  PURCHASE_ORDER_CREATE: 'PURCHASE_ORDER_CREATE',
+  PURCHASE_ORDER_READ: 'PURCHASE_ORDER_READ',
+  PURCHASE_ORDER_UPDATE: 'PURCHASE_ORDER_UPDATE',
+  PURCHASE_ORDER_DELETE: 'PURCHASE_ORDER_DELETE',
 
-  // Inventory permissions (using PRODUCT_* permissions for inventory)
-  INVENTORY_CREATE: 'PRODUCT_CREATE' as const,
-  INVENTORY_READ: 'PRODUCT_READ' as const,
-  INVENTORY_UPDATE: 'PRODUCT_UPDATE' as const,
-  INVENTORY_DELETE: 'PRODUCT_DELETE' as const,
+  // Dashboard permissions
+  DASHBOARD_READ: 'DASHBOARD_READ',
 } as const;
 
-type PermissionKey = keyof typeof PERMISSIONS;
-type PermissionValue = typeof PERMISSIONS[PermissionKey];
+// Helper function to get permissions for a role
+export const getPermissionsForRole = (role: UserRole): string[] => {
+  const basePermissions = [PERMISSIONS.USER_READ];
 
-// Override the Permission type from Prisma to ensure type safety
-export type Permission = PermissionValue;
-
-export type JwtPayload = {
-  userId: string;
-  email: string;
-  role: UserRole;
-  branch?: string;
-  permissions: Permission[];
-  iat?: number;
-  exp?: number;
-};
-
-export type RequestWithUser = Request & {
-  user: JwtPayload;
-};
-
-type RolePermissionsType = Record<UserRole, Permission[]>;
-
-// Helper to get all permissions for a role
-export const getPermissionsForRole = (role: UserRole): Permission[] => {
-  const permissions: Permission[] = [];
-  
-  // Base permissions for all roles
-  const basePermissions: Permission[] = [
-    PERMISSIONS.USER_READ,  // All users can view their own profile
-  ];
-
-  // Role-specific permissions
-  const rolePermissions: Record<UserRole, Permission[]> = {
+  const rolePermissions: Record<UserRole, string[]> = {
     [UserRole.ADMIN]: [
       ...basePermissions,
       PERMISSIONS.USER_CREATE,
@@ -113,14 +90,7 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.PRODUCT_CREATE,
       PERMISSIONS.PRODUCT_UPDATE,
       PERMISSIONS.PRODUCT_DELETE,
-      PERMISSIONS.SUPPLIER_CREATE,
-      PERMISSIONS.SUPPLIER_READ,
-      PERMISSIONS.SUPPLIER_UPDATE,
-      PERMISSIONS.SUPPLIER_DELETE,
-      PERMISSIONS.PURCHASE_ORDER_CREATE,
-      PERMISSIONS.PURCHASE_ORDER_READ,
-      PERMISSIONS.PURCHASE_ORDER_UPDATE,
-      PERMISSIONS.PURCHASE_ORDER_DELETE,
+      PERMISSIONS.DASHBOARD_READ,
     ],
     [UserRole.MANAGER]: [
       ...basePermissions,
@@ -129,7 +99,29 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.POS_CREATE,
       PERMISSIONS.POS_READ,
       PERMISSIONS.POS_UPDATE,
-
+      PERMISSIONS.MENU_CREATE,
+      PERMISSIONS.MENU_READ,
+      PERMISSIONS.MENU_UPDATE,
+      PERMISSIONS.MENU_DELETE,
+      PERMISSIONS.ORDER_CREATE,
+      PERMISSIONS.ORDER_READ,
+      PERMISSIONS.ORDER_UPDATE,
+      PERMISSIONS.ORDER_DELETE,
+      PERMISSIONS.PRODUCT_READ,
+      PERMISSIONS.DASHBOARD_READ,
+    ],
+    [UserRole.SUPER_ADMIN]: [
+      ...basePermissions,
+      PERMISSIONS.USER_CREATE,
+      PERMISSIONS.USER_UPDATE,
+      PERMISSIONS.USER_DELETE,
+      PERMISSIONS.POS_CREATE,
+      PERMISSIONS.POS_READ,
+      PERMISSIONS.POS_UPDATE,
+      PERMISSIONS.POS_DELETE,
+      PERMISSIONS.MANAGER_CREATE,
+      PERMISSIONS.MANAGER_READ,
+      PERMISSIONS.MANAGER_UPDATE,
       PERMISSIONS.MENU_CREATE,
       PERMISSIONS.MENU_READ,
       PERMISSIONS.MENU_UPDATE,
@@ -142,14 +134,36 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.PRODUCT_CREATE,
       PERMISSIONS.PRODUCT_UPDATE,
       PERMISSIONS.PRODUCT_DELETE,
-      PERMISSIONS.SUPPLIER_CREATE,
-      PERMISSIONS.SUPPLIER_READ,
-      PERMISSIONS.SUPPLIER_UPDATE,
-      PERMISSIONS.SUPPLIER_DELETE,
-      PERMISSIONS.PURCHASE_ORDER_CREATE,
-      PERMISSIONS.PURCHASE_ORDER_READ,
-      PERMISSIONS.PURCHASE_ORDER_UPDATE,
-      PERMISSIONS.PURCHASE_ORDER_DELETE,
+      PERMISSIONS.DASHBOARD_READ,
+    ],
+    [UserRole.RESTAURANT]: [
+      ...basePermissions,
+      PERMISSIONS.USER_READ,
+      PERMISSIONS.USER_UPDATE,
+      PERMISSIONS.POS_CREATE,
+      PERMISSIONS.POS_READ,
+      PERMISSIONS.POS_UPDATE,
+      PERMISSIONS.MENU_CREATE,
+      PERMISSIONS.MENU_READ,
+      PERMISSIONS.MENU_UPDATE,
+      PERMISSIONS.MENU_DELETE,
+      PERMISSIONS.ORDER_CREATE,
+      PERMISSIONS.ORDER_READ,
+      PERMISSIONS.ORDER_UPDATE,
+      PERMISSIONS.ORDER_DELETE,
+      PERMISSIONS.PRODUCT_READ,
+      PERMISSIONS.DASHBOARD_READ,
+    ],
+    [UserRole.SUPPLIER_MANAGER]: [
+      ...basePermissions,
+      PERMISSIONS.USER_READ,
+      PERMISSIONS.USER_UPDATE,
+      PERMISSIONS.ORDER_CREATE,
+      PERMISSIONS.ORDER_READ,
+      PERMISSIONS.ORDER_UPDATE,
+      PERMISSIONS.ORDER_DELETE,
+      PERMISSIONS.PRODUCT_READ,
+      PERMISSIONS.DASHBOARD_READ,
     ],
     [UserRole.KITCHEN_STAFF]: [
       ...basePermissions,
@@ -168,35 +182,43 @@ export const getPermissionsForRole = (role: UserRole): Permission[] => {
       PERMISSIONS.ORDER_UPDATE,
     ],
   };
+
   return rolePermissions[role] || [];
 };
 
-export const RolePermissions: RolePermissionsType = {
-  [UserRole.ADMIN]: getPermissionsForRole(UserRole.ADMIN),
-  [UserRole.MANAGER]: getPermissionsForRole(UserRole.MANAGER),
-  [UserRole.CASHIER]: getPermissionsForRole(UserRole.CASHIER),
-  [UserRole.WAITER]: getPermissionsForRole(UserRole.WAITER),
-  [UserRole.KITCHEN_STAFF]: getPermissionsForRole(UserRole.KITCHEN_STAFF),
-  [UserRole.CUSTOMER]: getPermissionsForRole(UserRole.CUSTOMER),
+export interface JwtPayload {
+  userId: string;
+  email: string;
+  role: UserRole;
+  branchId?: string;
+  branch?: string;
+  permissions: string[];
+  iat?: number;
+  exp?: number;
+  Id?:string;
+};
+
+export type RequestWithUser = Request & {
+  user: JwtPayload;
 };
 
 // Helper function to check if user has any of the required permissions
-export const hasPermission = (user: JwtPayload, requiredPermissions: Permission[]): boolean => {
-  if (user.role === UserRole.ADMIN) return true;
-  
+export const hasPermission = (user: JwtPayload, requiredPermissions: string[]): boolean => {
+  if (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) return true;
+
   if (!user.permissions || user.permissions.length === 0) {
     console.log("No permissions found for user");
     return false;
   }
-  
+
   console.log("User permissions:", user.permissions);
   console.log("Required permissions (any of):", requiredPermissions);
-  
+
   // Check if user has ANY of the required permissions
-  const hasPermission = requiredPermissions.some(permission => 
+  const hasPermission = requiredPermissions.some(permission =>
     user.permissions.includes(permission)
   );
-  
+
   console.log("Has permission:", hasPermission);
   return hasPermission;
 };

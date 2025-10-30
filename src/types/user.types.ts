@@ -5,6 +5,8 @@ export interface CreateUserInput {
   password: string;
   name?: string;
   branch?: string | null;
+  branchId?: string;
+  restaurantId?: string;
   role?: UserRole;
   status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   permissions?: Permission[];
@@ -27,6 +29,8 @@ export interface UpdateUserInput {
   email?: string;
   password?: string;
   branch?: string | null;
+  branchId?: string;
+  restaurantId?: string;
   role?: UserRole;
   status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   permissions?: Permission[];

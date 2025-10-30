@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { userService } from './user.service';
+import { authService } from '../../services/auth.service';
 import { ApiResponse, ApiError } from '../../utils/apiResponse';
 import { JwtPayload } from '../../types/auth.types';
 
@@ -64,6 +65,7 @@ export const createManager = async (req: Request, res: Response) => {
         'ORDER_READ',
         'ORDER_UPDATE',
         'USER_READ',
+        'DASHBOARD_READ',
       ] as const,
     };
 
@@ -208,11 +210,11 @@ export const getProfile = async (req: Request, res: Response) => {
       throw ApiError.unauthorized('User not authenticated');
     }
 
-    const user = await userService.getUserById(req.user.userId, req.user);
-    if (!user) {
-      throw ApiError.notFound('User not found');
-    }
+    const user = await authService.getCurrentUser(req.user.userId);
 
+    console.log('Profile request for user:', req.user.userId);
+    console.log('User permissions from auth service:', user.permissions);
+    console.log('User role:', user);
 
     // Include permissions and branch in response
     const response = ApiResponse.success(
@@ -222,13 +224,15 @@ export const getProfile = async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         branch: user.branch || null,
-        permissions: user.permissions.map(p => p.permission),
+        restaurant:user.restaurant,
+        permissions: user.permissions,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
       },
       'Profile retrieved successfully'
     );
 
+    console.log('Profile response:', response.data);
     ApiResponse.send(res, response);
   } catch (error: any) {
         console.log(error,"error")

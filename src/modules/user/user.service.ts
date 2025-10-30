@@ -1,4 +1,4 @@
-import { Prisma, User, UserRole, Permission, DayOfWeek } from '@prisma/client';
+import { Prisma, User, UserRole, Permission } from '@prisma/client';
 import prisma from '../../loaders/prisma';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
@@ -52,21 +52,21 @@ export const userService = {
       throw ApiError.badRequest('Invalid email format');
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
-
-    if (existingUser) {
-      throw ApiError.conflict('User with this email already exists');
-    }
-
-    // Set default role if not provided
-    const role = data.role || UserRole.CUSTOMER;
-    // Hash password
-    const hashedPassword = await hashPassword(data.password);
-
     try {
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email: data.email },
+      });
+
+      if (existingUser) {
+        throw ApiError.conflict('User with this email already exists');
+      }
+
+      // Set default role if not provided
+      const role = data.role || UserRole.CUSTOMER;
+      // Hash password
+      const hashedPassword = await hashPassword(data.password);
+
       // Create user with role, branch, and permissions
       const userData: any = {
         id: randomUUID(),
@@ -76,6 +76,36 @@ export const userService = {
         role,
         createdById: currentUser?.userId || null,
       };
+
+      // Validate branch exists if provided
+      if (data.branchId) {
+        const branchExists = await prisma.branch.findUnique({
+          where: { id: data.branchId },
+          select: { id: true }
+        });
+        if (!branchExists) {
+          throw ApiError.badRequest('Invalid branch selected');
+        }
+      }
+
+      // Validate restaurant exists if provided
+      if (data.restaurantId) {
+        const restaurantExists = await prisma.restaurant.findUnique({
+          where: { id: data.restaurantId },
+          select: { id: true }
+        });
+        if (!restaurantExists) {
+          throw ApiError.badRequest('Invalid restaurant selected');
+        }
+      }
+
+      // Add branch and restaurant if provided
+      if (data.branchId) {
+        userData.branchId = data.branchId;
+      }
+      if (data.restaurantId) {
+        userData.restaurantId = data.restaurantId;
+      }
 
       // Add shift schedule if provided
       if (data.shiftSchedule !== undefined) {
@@ -168,9 +198,10 @@ export const userService = {
   },
 
   // Create a new manager (admin only)
-  createManager: async (data: Omit<CreateUserInput, 'role' | 'permissions' | 'branch'> & {
+  createManager: async (data: Omit<CreateUserInput, 'role' | 'permissions'> & {
     permissions?: Permission[];
-    branch?: string | null;
+    branchId?: string;
+    restaurantId?: string;
     role?: UserRole; // Allow role to be passed optionally
     shiftSchedule?: {
       MONDAY?: { startTime?: string; endTime?: string };
@@ -184,38 +215,48 @@ export const userService = {
 
     isShiftActive?: boolean;
   }, currentUser: JwtPayload): Promise<SafeUser> => {
-    if (currentUser.role !== UserRole.ADMIN) {
-      throw ApiError.forbidden('Only admins can create managers');
+    try {
+      if (currentUser.role !== UserRole.ADMIN) {
+        throw ApiError.forbidden('Only admins can create managers');
+      }
+      console.log("creating manager service")
+      console.log(data, "data")
+      // Default manager permissions if none provided
+      const defaultManagerPermissions: Permission[] = [
+        Permission.POS_CREATE,
+        Permission.POS_READ,
+        Permission.POS_UPDATE,
+        Permission.MENU_READ,
+        Permission.MENU_UPDATE,
+        Permission.ORDER_READ,
+        Permission.ORDER_UPDATE,
+        Permission.PRODUCT_READ,
+        Permission.USER_READ,
+        Permission.DASHBOARD_READ,
+      ];
+
+      const managerData: CreateUserInput = {
+        ...data,
+        role: data.role || UserRole.MANAGER,
+        permissions: data.permissions || defaultManagerPermissions,
+        shiftSchedule: data.shiftSchedule,
+        isShiftActive: data.isShiftActive || false,
+      };
+
+      // Add branch and restaurant if provided
+      if (data.branchId) {
+        managerData.branchId = data.branchId;
+      }
+      if (data.restaurantId) {
+        managerData.restaurantId = data.restaurantId;
+      }
+
+      return userService.createUser(managerData, currentUser);
+    } catch (error) {
+      console.error('Error creating manager:', error);
+      if (error instanceof ApiError) throw error;
+      throw ApiError.internal('Failed to create manager');
     }
-    console.log("creating manager service")
-    console.log(data, "data")
-    // Default manager permissions if none provided
-    const defaultManagerPermissions: Permission[] = [
-      'POS_CREATE',
-      'POS_READ',
-      'POS_UPDATE',
-      'MENU_READ',
-      'MENU_UPDATE',
-      'ORDER_READ',
-      'ORDER_UPDATE',
-      'PRODUCT_READ',
-      'USER_READ',
-    ];
-
-    const managerData: CreateUserInput = {
-      ...data,
-      role: data.role || UserRole.MANAGER,
-      permissions: data.permissions || defaultManagerPermissions,
-      shiftSchedule: data.shiftSchedule,
-      isShiftActive: data.isShiftActive || false,
-    };
-
-    // Only include branch if it's provided
-    if (data.branch !== undefined) {
-      managerData.branch = data.branch;
-    }
-
-    return userService.createUser(managerData, currentUser);
   },
 
   // Get all users with pagination and filtering
@@ -296,9 +337,7 @@ export const userService = {
       if (error instanceof ApiError) throw error;
       throw ApiError.internal('Failed to fetch users');
     }
-  },
-
-
+  }, // Added missing comma here
 
   // Get user by ID
   getUserById: async (id: string, currentUser: JwtPayload): Promise<SafeUser | null> => {
@@ -488,7 +527,7 @@ export const userService = {
       }
 
       // Prepare update data - exclude status as it's not a valid field
-      const { permissions, ...updateData } = data;
+      const { permissions, branchId, ...updateData } = data;
 
       // Hash password if it's being updated
       if (updateData.password) {
@@ -497,17 +536,28 @@ export const userService = {
 
       // Start a transaction to ensure data consistency
       return await prisma.$transaction(async (tx) => {
+        // If permissions are being updated, first delete existing permissions
+        if (permissions && Array.isArray(permissions)) {
+          await tx.userPermission.deleteMany({
+            where: { userId: id }
+          });
+        }
+
         // Update the user
         const updatedUser = await tx.user.update({
           where: { id },
           data: {
             ...(updateData as any),
-            ...(data.permissions && {
+            ...(branchId && { branch: { connect: { id: branchId } } }),
+            ...(permissions && Array.isArray(permissions) && permissions.length > 0 && {
               permissions: {
-                deleteMany: {},
-                create: data.permissions.map((permission: Permission) => ({ permission }))
+                create: permissions.map((permission: string) => ({
+                  permission: permission as Permission
+                }))
               }
-            })
+            }),
+            // Update the updatedAt timestamp to ensure cache invalidation
+            updatedAt: new Date()
           },
           select: {
             id: true,
@@ -541,7 +591,7 @@ export const userService = {
             updatedAt: true,
           }
         });
-
+console.log(updatedUser,"updatedUser")
         // Return the user with permissions in the correct format
         return {
           id: updatedUser.id,
@@ -692,7 +742,7 @@ export const userService = {
               name: user.branch.restaurant.name,
             } : null
           } : null,
-          permissions: user.permissions.map((p) => p.permission),
+          permissions: user.permissions.map((p) => p.permission.toString()),
         },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '1d' },
@@ -714,7 +764,7 @@ export const userService = {
           } : null,
           role: user.role,
           status: user.status,
-          permissions: user.permissions.map((p) => p.permission),
+          permissions: user.permissions.map((p) => p.permission.toString()),
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
         },

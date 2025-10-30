@@ -1,6 +1,6 @@
 import app from "./app";
 import config from "./src/config";
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, UserRole, Permission } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { Server } from "http";
 import { initializeSocket } from "./src/services/socket.service";
@@ -90,9 +90,6 @@ process.on("uncaughtException",(err:Error)=>{
   console.log(err.name,err.message)
   process.exit(1)
 })
-
-// Import Permission enum after prisma client is initialized
-import { Permission } from '@prisma/client';
 
 // Start the application
 startServer();

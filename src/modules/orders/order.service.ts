@@ -519,9 +519,26 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
     const { items, ...orderData } = data;
 
-    // Verify user has access to the branch if branchName is provided
+    // Verify user has access to the branch if branchName is provided and get branch ID
+    let branchId: string | undefined;
     if (orderData.branchName) {
       await checkBranchAccess(currentUser.userId, orderData.branchName);
+      
+      // Find the branch to get its ID
+      const branch = await prisma.branch.findFirst({
+        where: { 
+          name: orderData.branchName,
+          ...(orderData.restaurantId && { restaurantId: orderData.restaurantId })
+        },
+        select: { id: true }
+      });
+
+      if (!branch) {
+        throw new Error(`Branch '${orderData.branchName}' not found`);
+      }
+      
+      branchId = branch.id;
+      console.log('Using branch ID:', branchId, 'for branch:', orderData.branchName);
     }
 
     // Check inventory availability before creating order
@@ -590,6 +607,7 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
         data: {
           ...orderWithTotals,
           branchName: orderData.branchName,
+          branchId: branchId,
           restaurantId: orderData.restaurantId, // Add restaurantId here
           createdById: currentUser.userId as string,
           orderType: orderData.orderType,
