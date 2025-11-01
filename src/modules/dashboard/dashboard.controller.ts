@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
-import { DashboardService, DashboardStats } from './dashboard.service';
+import DashboardService from './dashboard.service';
 import { createRouteHandler } from '../../utils/route-handler';
+
+// Use the default exported service
+const dashboardService = DashboardService;
 
 // Validation function for period parameter
 const validatePeriod = (period: unknown): 'day' | 'week' | 'month' => {
@@ -12,23 +15,25 @@ const validatePeriod = (period: unknown): 'day' | 'week' | 'month' => {
 
 export const DashboardController = {
   getDashboardStats: createRouteHandler(async (req: Request, res: Response) => {
-    const period = validatePeriod(req.query.period);
+    const period = req.query.period as 'day' | 'week' | 'month' | 'custom';
     const branchId = req.query.branchId as string | undefined;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
     const user = (req as any).user; // Get user from request (added by auth middleware)
-    console.log(user,"user")
+    
     console.log('=== DASHBOARD CONTROLLER ===');
     console.log('Request from user:', {
       userId: user?.userId,
       role: user?.role,
       branchId: user?.branchId,
-      requestedBranchId: branchId
+      requestedBranchId: branchId,
+      period,
+      startDate,
+      endDate
     });
     
-    console.log('Request query:', JSON.stringify(req.query, null, 2));
-    
     try {
-      // For managers, use their assigned branch ID if no specific branch is requested
-      // For admins, only filter by branch if explicitly requested
+      // Determine effective branch ID based on user role and request
       let effectiveBranchId: string | undefined;
       
       if (branchId) {
@@ -39,27 +44,26 @@ export const DashboardController = {
         effectiveBranchId = typeof user.branchId === 'string' ? user.branchId : user.branch?.id;
       }
       
-      console.log('Fetching stats with:', {
-        period,
+      console.log('Effective branch ID:', {
         branchId: effectiveBranchId || 'ALL BRANCHES',
         isManager: user?.role === 'MANAGER',
         userBranchId: user?.branchId
       });
       
-      const stats = await DashboardService.getDashboardStats(period, effectiveBranchId);
+      // Get dashboard stats from the service
+      const stats = await dashboardService.getDashboardStats(
+        period,
+        effectiveBranchId,
+        startDate ? new Date(startDate) : undefined,
+        endDate ? new Date(endDate) : undefined
+      );
       
       console.log('Dashboard stats response:', { 
         totalRevenue: stats.totalRevenue,
         totalOrders: stats.totalOrders,
-        branchIdUsed: effectiveBranchId || 'ALL BRANCHES',
-        hasData: stats.totalRevenue > 0 || stats.totalOrders > 0,
-        responseKeys: Object.keys(stats)
       });
       
-      return res.json({
-        success: true,
-        data: stats,
-      });
+      return res.json({ success: true, data: stats });
     } catch (error) {
       console.error('Error in getDashboardStats:', error);
       return res.status(500).json({
@@ -68,10 +72,10 @@ export const DashboardController = {
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
-  }), // Add missing closing bracket and parenthesis
-
-  // Add more controller methods as needed
+  })
 };
+
+// Add more controller methods as needed
 
 // Routes are now handled by the main router
 

@@ -1,11 +1,26 @@
-import { Request, Response } from "express";
-import * as orderService from "./order.service";
-import { ApiResponse } from "../../utils/apiResponse";
-import { Order, OrderStatus, PaymentStatus, OrderType, PaymentMethod } from '@prisma/client';
-import { JwtPayload } from "../../types/auth.types";
+import { Request, Response } from 'express';
+import { JwtPayload } from 'jsonwebtoken';
+import { OrderWithItems } from './order.types';
+import { orderService } from './order.service';
+import prisma from '../../loaders/prisma';
+import { ApiResponse } from '../../types/response.types';
+import { Printer, OrderStatus, PaymentStatus, OrderType, PaymentMethod, OrderItem, PrintJob } from '@prisma/client';
 import { parseISO, isDate } from 'date-fns';
 import { getIo } from "../../../app";
-import PrintService from "../../services/print.service";
+import { NotificationService } from "../../services/notification.service";
+
+// Define custom JwtPayload type to match your auth system
+interface CustomJwtPayload extends JwtPayload {
+  userId: string;
+  email: string;
+  role: string;
+  permissions: string[];
+  branch?: {
+    id: string;
+    name: string;
+  };
+}
+
 interface OrderQueryParams {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
@@ -40,18 +55,112 @@ import { printReceipt } from "../../services/receipt.service";
 import { NotificationService } from "../../services/notification.service";
 
 // Wrapper function to handle receipt printing
-async function printOrderReceipt(orderId: string): Promise<void> {
-  console.log(`\n=== printOrderReceipt called for order ${orderId} ===`);
+async function printOrderReceipt(orderId: string): Promise<boolean> {
   try {
-    console.log('Calling printReceipt function...');
-    const success = await printReceipt(orderId);
-    if (!success) {
-      console.error(`❌ Failed to print receipt for order ${orderId}`);
-    } else {
-      console.log(`✅ Successfully processed receipt for order ${orderId}`);
+    console.log(`[PrintService] Starting receipt printing for order ${orderId}`);
+    
+    // Get the order with all necessary relations
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        branch: true,
+        orderItems: {
+          include: {
+            menuItem: true,
+            modifiers: {
+              include: {
+                modifier: true
+              }
+            }
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        payment: true
+      }
+    });
+
+    if (!order) {
+      console.error(`[PrintService] Order ${orderId} not found`);
+      return false;
     }
-  } catch (error: unknown) {
-    console.error(`❌ Error in printOrderReceipt for order ${orderId}:`, error);
+
+    if (!order.branchId) {
+      console.error(`[PrintService] No branch associated with order ${orderId}`);
+      return false;
+    }
+
+    // Get all active receipt printers for this branch
+    const receiptPrinters = await prisma.printer.findMany({
+      where: {
+        branchId: order.branchId,
+        type: 'RECEIPT',
+        isActive: true,
+        status: 'ONLINE'
+      }
+    });
+
+    if (receiptPrinters.length === 0) {
+      console.warn(`[PrintService] No active receipt printers found for branch ${order.branchId}`);
+      return false;
+    }
+
+    console.log(`[PrintService] Found ${receiptPrinters.length} receipt printers for order ${orderId}`);
+
+    // Format the order data for printing
+    const printData = {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      tableNumber: order.tableNumber || 'Takeaway',
+      customerName: order.customerName || 'Walk-in Customer',
+      items: order.orderItems.map((item: any) => ({
+        name: item.menuItem?.name || 'Custom Item',
+        quantity: item.quantity,
+        price: item.price,
+        total: item.quantity * item.price,
+        notes: item.notes || '',
+        modifiers: item.modifiers.map((m: any) => m.modifier?.name).filter(Boolean).join(', ')
+      })),
+      subtotal: order.subtotal,
+      tax: order.tax,
+      discount: order.discount || 0,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+      branchName: order.branch?.name || 'Unknown Branch',
+      cashier: order.createdBy?.name || 'System',
+      paymentStatus: order.payment?.[0]?.status || 'PENDING'
+    };
+
+    // Create print jobs for each receipt printer
+    const printJobs = await Promise.all(
+      receiptPrinters.map(printer => 
+        prisma.printJob.create({
+          data: {
+            printerId: printer.id,
+            jobType: 'RECEIPT',
+            referenceId: order.id,
+            status: 'PENDING',
+            content: JSON.stringify(printData),
+            attempts: 0,
+            error: null,
+            data: {}
+          }
+        })
+      )
+    );
+
+    console.log(`[PrintService] Created ${printJobs.length} print jobs for order ${orderId}`);
+    return true;
+    
+  } catch (error) {
+    console.error(`[PrintService] Error printing receipt for order ${orderId}:`, error);
+    return false;
   }
 }
 

@@ -201,6 +201,37 @@ enum ServiceType {
   TAKE_AWAY
   BOTH
 }
+// Add to your existing enums
+enum PrinterType {
+  KITCHEN
+  RECEIPT
+  BAR
+  LABEL
+  REPORT
+}
+
+enum PrinterConnectionType {
+  USB
+  NETWORK
+  BLUETOOTH
+  SERIAL
+}
+
+enum PrinterStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+  MAINTENANCE
+}
+
+enum PaperSize {
+  TWO_INCH
+  THREE_INCH
+  FOUR_INCH
+  A4
+  A5
+  LETTER
+}
 
 /**
  * ===================== MODELS =====================
@@ -267,6 +298,7 @@ model Branch {
   restaurantId           String?
   users                  User[]
   shifts                 Shift[]
+  printers               Printer[]
   menuCategories         MenuCategory[]
   menuItems              MenuItem[]
   orders                 Order[]
@@ -730,12 +762,13 @@ model MenuCategory {
   isActive     Boolean     @default(true)
   branchName   String? // Added to match database schema
   restaurantId String? // Added to support restaurant assignment
-  menuItems    MenuItem[]
-  branch       Branch?     @relation(fields: [branchId], references: [id])
-  branchId     String?
-  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  menuItems         MenuItem[]
+  printerCategories PrinterCategory[]
+  branch            Branch?     @relation(fields: [branchId], references: [id])
+  branchId          String?
+  restaurant        Restaurant? @relation(fields: [restaurantId], references: [id])
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   @@index([branchId])
   @@index([branchName]) // Added index for branchName
@@ -752,6 +785,7 @@ model MenuItem {
   taxRate             Float
   taxExempt           Boolean              @default(false)
   isActive            Boolean              @default(true)
+  isGlobal            Boolean              @default(false)
   categoryId          String
   category            MenuCategory         @relation(fields: [categoryId], references: [id])
   orderItems          OrderItem[]
@@ -1029,4 +1063,96 @@ model MenuItemModifier {
 
   // Ensure a modifier can only be linked to a menu item in the same restaurant/branch
   @@unique([menuItemId, modifierId, restaurantId, branchId])
+}
+// Add to your models
+model Printer {
+  id          String              @id @default(uuid())
+  name        String
+  description String?
+  
+  // Printer Configuration
+  type        PrinterType         @default(RECEIPT)
+  connectionType PrinterConnectionType @default(USB)
+  status      PrinterStatus       @default(ONLINE)
+  paperSize   PaperSize           @default(TWO_INCH)
+  
+  // Connection Details
+  devicePath  String?             // For USB printers
+  ipAddress   String?             // For network printers
+  port        Int?                // For network printers
+  macAddress  String?             // For Bluetooth printers
+  
+  // Printer Settings
+  characterPerLine Int            @default(42)
+  autoCut      Boolean            @default(true)
+  openCashDrawer Boolean          @default(false)
+  
+  // Print Settings
+  copies      Int                 @default(1)
+  printLogo   Boolean             @default(true)
+  headerText  String?
+  footerText  String?
+  
+  // Branch Assignment
+  branch      Branch              @relation(fields: [branchId], references: [id])
+  branchId    String
+  
+  // Category assignments for kitchen printers
+  categories  PrinterCategory[]
+  
+  // Relationships
+  printJobs   PrintJob[]
+  
+  // Audit
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  
+  @@unique([branchId, name])
+  @@index([branchId])
+  @@index([type])
+  @@index([status])
+}
+
+model PrinterCategory {
+  id          String        @id @default(uuid())
+  printer     Printer       @relation(fields: [printerId], references: [id], onDelete: Cascade)
+  printerId   String
+  category    MenuCategory  @relation(fields: [categoryId], references: [id])
+  categoryId  String
+  
+  createdAt   DateTime      @default(now())
+  
+  @@unique([printerId, categoryId])
+  @@index([printerId])
+  @@index([categoryId])
+}
+
+model PrintJob {
+  id          String        @id @default(uuid())
+  printer     Printer       @relation(fields: [printerId], references: [id])
+  printerId   String
+  
+  // Job Details
+  jobType     String        // ORDER, RECEIPT, REPORT, etc.
+  referenceId String?       // Order ID, etc.
+  content     Json          // Print content in structured format
+  rawContent  String?       // Raw print content
+  
+  // Job Status
+  status      String        @default("PENDING") // PENDING, PRINTING, COMPLETED, FAILED
+  attempts    Int           @default(0)
+  errorMessage String?
+  
+  // Print Results
+  printedAt   DateTime?
+  
+  // Audit
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@index([printerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([referenceId])
 }
