@@ -5,10 +5,24 @@ import { PERMISSIONS } from '../../types/auth.types';
 
 const router = Router();
 
-// Apply authentication to all dashboard routes
 router.use(authenticateJWT);
 
-// Dashboard stats route - requires DASHBOARD_READ permission
-router.get('/stats', checkPermission([PERMISSIONS.DASHBOARD_READ]), DashboardController.getDashboardStats);
+// Dashboard stats route
+router.get('/stats', 
+  checkPermission([PERMISSIONS.DASHBOARD_READ]), 
+  DashboardController.getDashboardStats
+);
+
+// // New alerts route
+// router.get('/alerts',
+//   checkPermission([PERMISSIONS.DASHBOARD_READ, PERMISSIONS.INVENTORY_READ]),
+//   DashboardController.getAlerts
+// );
+
+// // Custom reports route
+// router.get('/custom-report',
+//   checkPermission([PERMISSIONS.DASHBOARD_READ]),
+//   DashboardController.getCustomReport
+// );
 
 export { router as dashboardRouter };
