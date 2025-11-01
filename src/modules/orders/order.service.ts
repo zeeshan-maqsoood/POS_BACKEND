@@ -1186,19 +1186,21 @@ export async function getOrderByIdService(id: string, currentUser: JwtPayload) {
   if (!user) throw new Error('User not found');
 
   // If user is a manager
-  if (user.role === 'MANAGER') {
-    // Allow managers to view any order from their branch, not just their own
-    if (user.branch && order.branchName !== user.branch) {
-      throw new Error('You do not have permission to view this order');
-    }
-  }
-  // If user is admin and order has a branch, check branch access
-  else if (order.branchName) {
-    const hasAccess = await checkBranchAccess(currentUser.userId, order.branchName);
-    if (!hasAccess) {
-      throw new Error('You do not have permission to view this order');
-    }
-  }
+  console.log(order.branchName,"branchName")
+  console.log(user.branch,"userbranch")
+  // if (user.role === 'MANAGER') {
+  //   // Allow managers to view any order from their branch, not just their own
+  //   if (user.branch && order.branchName !== user.branch) {
+  //     throw new Error('You do not have permission to view this order');
+  //   }
+  // }
+  // // If user is admin and order has a branch, check branch access
+  // else if (order.branchName) {
+  //   const hasAccess = await checkBranchAccess(currentUser.userId, order.branchName);
+  //   if (!hasAccess) {
+  //     throw new Error('You do not have permission to view this order');
+  //   }
+  // }
 
   return order;
 }
