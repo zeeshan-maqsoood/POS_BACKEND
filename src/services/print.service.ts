@@ -315,10 +315,13 @@ type BranchName = 'Bradford' | 'Leeds' | 'default';
 class PrintService {
     // Default printer configuration
     private static readonly PRINTER_CONFIG = {
-        manager: 'HP LaserJet P1005',     // Manager's printer
-        kitchen: 'HP LaserJet P1005',     // Kitchen printer (using same for now)
-        fallback: 'Microsoft Print to PDF' // Fallback for testing
+        // Default to empty to force printer detection
+        manager: '',
+        kitchen: '',
+        fallback: ''
     };
+
+    // Branch-specific printer configuration
     private static readonly BRANCH_PRINTERS: Record<BranchName, { manager: string; kitchen: string }> = {
         'Bradford': {
             manager: 'HP LaserJet P1005',
@@ -329,8 +332,9 @@ class PrintService {
             kitchen: 'HP LaserJet P1005'
         },
         'default': {
-            manager: 'Microsoft Print to PDF',
-            kitchen: 'Microsoft Print to PDF'
+            // Default to empty to use first available printer
+            manager: '',
+            kitchen: ''
         }
     };
     /**
@@ -709,22 +713,20 @@ class PrintService {
             const branchPrinters = this.BRANCH_PRINTERS[branchName as BranchName] || this.BRANCH_PRINTERS.default;
             let printerToUse = type === 'manager' ? branchPrinters.manager : branchPrinters.kitchen;
     
-            console.log(`Attempting to print to ${printerToUse}...`);
+            console.log(`Attempting to print to ${printerToUse || 'first available printer'}...`);
     
-            // Check if requested printer is available
-            if (!cleanPrinters.includes(printerToUse.trim())) {
-                console.warn(`Printer '${printerToUse}' not found. Available printers:`, cleanPrinters);
-                
-                // Try fallback printer
-                const fallbackPrinter = this.PRINTER_CONFIG.fallback;
-                if (fallbackPrinter && cleanPrinters.includes(fallbackPrinter.trim())) {
-                    console.log(`Using fallback printer: ${fallbackPrinter}`);
-                    printerToUse = fallbackPrinter;
-                } 
-                // Try first available printer
-                else if (cleanPrinters.length > 0) {
-                    printerToUse = cleanPrinters[0].trim();
-                    console.log(`Using first available printer: ${printerToUse}`);
+            // If no specific printer is configured or it's not available, use the first available printer
+            if (!printerToUse || !cleanPrinters.some(p => p.trim() === printerToUse.trim())) {
+                if (cleanPrinters.length > 0) {
+                    // Skip PDF printers if possible
+                    const nonPdfPrinters = cleanPrinters.filter(p => 
+                        !p.toLowerCase().includes('pdf') && 
+                        !p.toLowerCase().includes('xps') && 
+                        !p.toLowerCase().includes('microsoft print')
+                    );
+                    
+                    printerToUse = nonPdfPrinters[0] || cleanPrinters[0];
+                    console.log(`Using available printer: ${printerToUse}`);
                 } else {
                     throw new Error('No printers available');
                 }
@@ -753,21 +755,33 @@ class PrintService {
      * Print file to a specific printer
      */
     private static async printToPrinter(filePath: string, printerName: string): Promise<void> {
+    try {
+        // First try: Use PowerShell with direct printer name
+        const printCommand = `powershell -Command "$ErrorActionPreference = 'Stop'; ` +
+            `$printer = Get-Printer -Name '${printerName.replace(/'/g, "''")}' -ErrorAction SilentlyContinue; ` +
+            `if (-not $printer) { throw 'Printer not found' }; ` +
+            `Get-Content -Path '${filePath.replace(/'/g, "''")}' -Encoding UTF8 | ` +
+            `Out-Printer -Name '${printerName.replace(/'/g, "''")}'"`;
+        
+        console.log(`Print command: ${printCommand}`);
+        
         try {
-            const command = `powershell -Command "$ErrorActionPreference = 'Stop'; ` +
-                          `$printer = Get-Printer -Name '${printerName.replace(/'/g, "''")}' -ErrorAction SilentlyContinue; ` +
-                          `if (-not $printer) { throw 'Printer not found' }; ` + 
-                          `Get-Content -Path '${filePath.replace(/'/g, "''")}' ` +
-                          `-Encoding UTF8 | Out-Printer -Name '${printerName.replace(/'/g, "''")}'"`;
-            
-            console.log(`Print command: ${command}`);
-            await this.execCommand(command);
-        } catch (error) {
-            console.error(`Failed to print to ${printerName}:`, error);
-            throw error;
+            await this.execCommand(printCommand);
+            return; // Success, exit the function
+        } catch (psError) {
+            console.log('PowerShell print method failed, trying alternative method...', psError);
         }
-    }
 
+        // Fallback: Use the Windows 'print' command
+        const altPrintCommand = `print /D:"${printerName.replace(/"/g, '\\"')}" "${filePath.replace(/\//g, '\\')}"`;
+        console.log(`Trying alternative print command: ${altPrintCommand}`);
+        
+        await this.execCommand(altPrintCommand);
+    } catch (error) {
+        console.error(`Failed to print to ${printerName}:`, error);
+        throw error;
+    }
+}
     /**
      * List all available printers
      */

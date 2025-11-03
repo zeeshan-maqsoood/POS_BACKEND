@@ -675,26 +675,26 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
     }
 
     // Print receipts in background
-    PrintService.printOrderReceipt(order)
-      .then(result => {
-        console.log('PrintService result:', result); // Debug: Log the full result
-        const { manager, kitchen } = result;
+    // PrintService.printOrderReceipt(order)
+    //   .then(result => {
+    //     console.log('PrintService result:', result); // Debug: Log the full result
+    //     const { manager, kitchen } = result;
 
-        // Log full receipt to console if printing succeeds
-        if (manager || kitchen) {
-          console.log('\n========== PHYSICAL RECEIPT CONTENT =========='); // Indicate it's the physical print content
-          logReceiptToConsole(order); // Log the receipt details to console
-          console.log('==========================================\n');
-        }
+    //     // Log full receipt to console if printing succeeds
+    //     if (manager || kitchen) {
+    //       console.log('\n========== PHYSICAL RECEIPT CONTENT =========='); // Indicate it's the physical print content
+    //       logReceiptToConsole(order); // Log the receipt details to console
+    //       console.log('==========================================\n');
+    //     }
 
-        if (manager) console.log('Manager receipt printed successfully for order:', order.orderNumber);
-        if (kitchen) console.log('Kitchen receipt printed successfully for order:', order.orderNumber);
-        if (!manager) console.warn('Failed to print manager receipt');
-        if (!kitchen) console.warn('Failed to print kitchen receipt');
-      })
-      .catch(error => {
-        console.error('Error printing receipts:', error);
-      });
+    //     if (manager) console.log('Manager receipt printed successfully for order:', order.orderNumber);
+    //     if (kitchen) console.log('Kitchen receipt printed successfully for order:', order.orderNumber);
+    //     if (!manager) console.warn('Failed to print manager receipt');
+    //     if (!kitchen) console.warn('Failed to print kitchen receipt');
+    //   })
+    //   .catch(error => {
+    //     console.error('Error printing receipts:', error);
+    //   });
 
     return order;
   } catch (error) {

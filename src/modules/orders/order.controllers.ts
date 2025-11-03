@@ -74,9 +74,16 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       throw new Error('Failed to create order: Invalid order data returned from service');
     }
     // Print receipt in the background (don't await to avoid delaying the response)
-    // printOrderReceipt(order.id).catch((error: Error) => {
-    //   console.error('Error printing receipt:', error);
-    // });
+    console.log(`🖨️  Queueing receipt print for order ${order.id}`);
+    printOrderReceipt(order.id).then(success => {
+      if (success) {
+        console.log(`✅ Successfully printed receipt for order ${order.id}`);
+      } else {
+        console.error(`❌ Failed to print receipt for order ${order.id}`);
+      }
+    }).catch((error: Error) => {
+      console.error(`❌ Error printing receipt for order ${order.id}:`, error);
+    });
     
     ApiResponse.send(res, ApiResponse.success<OrderWithItems>(order, "Order created successfully", 201));
   } catch (error: any) {
