@@ -133,7 +133,7 @@ export const printReceipt = async (orderId: string): Promise<boolean> => {
       itemCount: order.items?.length || 0
     });
 
-    // Generate and log the receipt content
+    // Generate the receipt content
     console.log('Generating receipt content...');
     const receiptContent = generateReceipt(order);
     
@@ -145,13 +145,37 @@ export const printReceipt = async (orderId: string): Promise<boolean> => {
     console.log(`Payment Method: ${order.paymentMethod || 'Not specified'}`);
     console.log(`Total: £${order.total?.toFixed(2) || '0.00'}`);
     
-    // Log the receipt content
-    console.log('\n--- RECEIPT CONTENT ---');
-    console.log(receiptContent);
-    console.log('--- END OF RECEIPT ---\n');
-    
-    console.log('✅ Receipt generated successfully');
-    return true;
+    try {
+      // Get all available printers
+      console.log('🔍 Detecting available printers...');
+      const printers = await PrintService.listPrinters();
+      
+      if (printers.length === 0) {
+        console.error('❌ No printers found');
+        return false;
+      }
+      
+      console.log(`✅ Found ${printers.length} printer(s):`, printers);
+      
+      // Try to find a receipt printer first, or use the first available printer
+      const receiptPrinter = printers.find(p => p.toLowerCase().includes('receipt')) || printers[0];
+      console.log(`\n🖨️  Selected printer: ${receiptPrinter}`);
+      
+      // Print the receipt
+      console.log('Sending receipt to printer...');
+      const printSuccess = await PrintService.printToPrinterDirect(receiptContent, receiptPrinter);
+      
+      if (printSuccess) {
+        console.log('✅ Receipt sent to printer successfully');
+        return true;
+      } else {
+        console.error('❌ Failed to print receipt - print job not confirmed');
+        return false;
+      }
+    } catch (printError) {
+      console.error('❌ Error during printing process:', printError);
+      return false;
+    }
   } catch (error) {
     console.error('Error printing receipt:', error);
     return false;

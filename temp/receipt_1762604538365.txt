@@ -1,0 +1,18 @@
+
+--------------------------------
+  branch 1
+  Order #ORD-535761-IFT6
+  11/8/2025, 5:22:15 PM
+--------------------------------
+sdfsdf              x1        24,00 €     24,00 €
+--------------------------------
+Subtotal:                         24,00 €
+Tax:                              0,00 €
+TOTAL:                          24,00 €
+--------------------------------
+Payment: CASH (PAID)
+Table: 17
+Customer: sdfsdf
+--------------------------------
+Thank you for your business!
+Please come again!
