@@ -338,7 +338,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     const { id } = req.params;
     const data = req.body;
     const currentUser = req.user as JwtPayload;
-
+console.log("starting order update")
     const updatedOrder = await orderService.updateOrder(id, data, currentUser);
     
     const response = ApiResponse.success(updatedOrder, 'Order updated successfully');

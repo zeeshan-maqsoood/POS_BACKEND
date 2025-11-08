@@ -249,6 +249,9 @@ model User {
 
   // Shift Management (for managers and staff)
   shiftSchedule Json? // { MONDAY: { startTime: "09:00", endTime: "17:00" }, TUESDAY: { startTime: "10:00", endTime: "18:00" }, ... }
+  
+  // Relations
+  dayEndReports DayEndReport[]
   isShiftActive Boolean @default(true)
 
   createdUsers User[]           @relation("CreatedUsers")
@@ -276,9 +279,10 @@ model User {
 }
 
 model Branch {
-  id          String  @id @default(uuid())
-  name        String  @unique
-  description String?
+  id             String         @id @default(uuid())
+  name           String         @unique
+  description    String?
+  dayEndReports  DayEndReport[]
   address     String?
   city        String?
   state       String?
@@ -1010,6 +1014,34 @@ model InventorySubcategory {
   @@index([restaurantId])
   @@index([categoryId])
   @@index([branchName])
+}
+
+model DayEndReport {
+  id                 String    @id @default(uuid())
+  date               DateTime  @default(now())
+  expectedTotal      Decimal   @db.Decimal(10, 2)
+  actualCash         Decimal   @db.Decimal(10, 2)
+  difference         Decimal   @db.Decimal(10, 2)
+  ordersCount        Int
+  totalSales         Decimal   @db.Decimal(10, 2)
+  averageOrderValue  Decimal?  @db.Decimal(10, 2)
+  paymentMethods     Json?     @default("[]")
+  salesByCategory    Json?     @default("[]")
+  topSellingItems    Json?     @default("[]")
+  discountSummary    Json?     @default("{}")
+  taxSummary         Json?     @default("{}")
+  hourlySales        Json?     @default("[]")
+  orderTypes         Json?     @default("[]")
+  
+  // Relations
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  branchId     String?
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdById  String
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model InventoryItem {

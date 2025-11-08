@@ -1,6 +1,182 @@
 // services/printer.service.ts
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as http from 'http';
+import * as https from 'https';
+import * as FormData from 'form-data';
+
 const prisma = new PrismaClient();
+const execAsync = promisify(exec);
+
+/**
+ * Detects if a printer is a remote CUPS printer
+ */
+function isRemoteCupsPrinter(printerName: string): boolean {
+  return printerName.startsWith('http://') || 
+         printerName.startsWith('https://') ||
+         printerName.startsWith('ipp://') ||
+         printerName.startsWith('ipps://');
+}
+
+/**
+ * Sends a print job to a remote CUPS server using IPP
+ */
+async function printWithRemoteCups(printerUrl: string, content: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Parse the printer URL
+    const url = new URL(printerUrl);
+    const isHttps = url.protocol === 'https:';
+    const port = url.port || (isHttps ? 443 : 80);
+    const path = url.pathname || '/printers/' + url.hostname;
+    
+    // Prepare the print job
+    const form = new FormData();
+    form.append('document', Buffer.from(content), {
+      filename: `print_${Date.now()}.txt`,
+      contentType: 'application/octet-stream'
+    });
+    
+    const options = {
+      hostname: url.hostname,
+      port: port,
+      path: path,
+      method: 'POST',
+      headers: {
+        ...form.getHeaders(),
+        'Content-Length': form.getLengthSync(),
+        'Content-Type': 'application/ipp',
+        'Accept': 'application/ipp',
+      },
+      rejectUnauthorized: false // For self-signed certificates
+    };
+
+    const req = (isHttps ? https : http).request(options, (res) => {
+      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+        console.log(`[REMOTE PRINT] Successfully sent to ${printerUrl}`);
+        resolve();
+      } else {
+        reject(new Error(`Remote printer returned status code: ${res.statusCode}`));
+      }
+    });
+
+    req.on('error', (error) => {
+      console.error(`[REMOTE PRINT ERROR] Failed to send to ${printerUrl}:`, error);
+      reject(error);
+    });
+
+    // Send the form data
+    form.pipe(req);
+  });
+}
+
+/**
+ * Platform-specific print function that supports both local and remote printers
+ */
+async function printWithOs(printerName: string, content: string): Promise<void> {
+  const platform = os.platform();
+  const tempDir = os.tmpdir();
+  const tempFile = path.join(tempDir, `print_${Date.now()}.txt`);
+  
+  try {
+    // Check if this is a remote CUPS printer
+    if (isRemoteCupsPrinter(printerName)) {
+      return await printWithRemoteCups(printerName, content);
+    }
+
+    // Local printing
+    await fs.promises.writeFile(tempFile, content, 'utf8');
+
+    if (platform === 'win32') {
+      // Windows printing
+      try {
+        await execAsync(`print /D\\${printerName} "${tempFile}"`);
+      } catch (error) {
+        console.warn('Print command failed, trying alternative method...');
+        await execAsync(`notepad /p "${tempFile}"`);
+      }
+    } else {
+      // Linux/Unix printing with lpr
+      try {
+        await execAsync(`lpr -P ${printerName} "${tempFile}"`);
+      } catch (error) {
+        console.error('Failed to print with lpr, ensure CUPS is installed and configured');
+        throw error;
+      }
+    }
+    
+    console.log(`[PRINTING] Sent to printer: ${printerName}`);
+  } catch (error) {
+    console.error(`[PRINTING ERROR] Failed to print to ${printerName}:`, error);
+    throw error;
+  } finally {
+    // Clean up the temporary file
+    try {
+      if (fs.existsSync(tempFile)) {
+        await fs.promises.unlink(tempFile);
+      }
+    } catch (cleanupError) {
+      console.warn('Failed to clean up temporary print file:', cleanupError);
+    }
+  }
+}
+
+/**
+ * Helper function for direct printing with enhanced printer handling
+ */
+export async function printWithPrinter(printer: any, content: string): Promise<void> {
+  try {
+    // Check if printer is an object with connection details or just a name
+    let printerName: string;
+    let printerOptions: any = {};
+
+    if (typeof printer === 'string') {
+      printerName = printer;
+    } else {
+      printerName = printer.cupsName || printer.name || printer.connectionString;
+      printerOptions = {
+        host: printer.host,
+        port: printer.port,
+        auth: printer.auth,
+        protocol: printer.protocol || 'http',
+        queue: printer.queue || '/printers/',
+        ...printer.options
+      };
+    }
+
+    if (!printerName) {
+      throw new Error('No printer name or connection details provided');
+    }
+
+    console.log(`[PRINTING] Sending to printer: ${printerName}`);
+    
+    // If printer has connection details, construct the URL
+    if (printerOptions.host) {
+      const protocol = printerOptions.protocol || 'http';
+      const port = printerOptions.port ? `:${printerOptions.port}` : '';
+      const auth = printerOptions.auth ? `${printerOptions.auth}@` : '';
+      const queue = printerOptions.queue || '/printers/';
+      
+      // Create a proper CUPS URL
+      const printerUrl = `${protocol}://${auth}${printerOptions.host}${port}${queue}${encodeURIComponent(printerName)}`;
+      console.log(`[PRINTING] Using remote printer URL: ${printerUrl.replace(/:[^:]*?@/, ':***@')}`);
+      
+      // Use the platform-specific print function with the remote URL
+      await printWithOs(printerUrl, content);
+    } else {
+      // Local printer
+      await printWithOs(printerName, content);
+    }
+    
+    return Promise.resolve();
+  } catch (error) {
+    console.error(`[PRINTING ERROR] Failed to print to ${printer?.name || 'printer'}:`, error);
+    return Promise.reject(error);
+  }
+}
 
 export const printerService = {
   // ==================== PRINTER MANAGEMENT ====================
@@ -491,38 +667,90 @@ export const printerService = {
 
   async createReceiptPrintJob(printer: any, order: any) {
     const receiptContent = this.generateReceiptContent(order, printer);
+    const contentString = typeof receiptContent.raw === 'string' ? receiptContent.raw : JSON.stringify(receiptContent);
     
-    return prisma.printJob.create({
-      data: {
-        printerId: printer.id,
-        jobType: 'RECEIPT',
-        referenceId: order.id,
-        content: receiptContent.structured,
-        rawContent: receiptContent.raw,
-        status: 'PENDING'
-      },
-      include: {
-        printer: true
-      }
-    });
+    try {
+      // Print directly to the printer
+      await printWithPrinter(printer, contentString);
+      console.log(`Successfully printed receipt for order ${order.id}`);
+      
+      // Save to database as completed
+      return prisma.printJob.create({
+        data: {
+          printerId: printer.id,
+          jobType: 'RECEIPT',
+          referenceId: order.id,
+          content: receiptContent.structured as Prisma.InputJsonValue,
+          rawContent: contentString,
+          status: 'COMPLETED',
+          printedAt: new Date()
+        },
+        include: { printer: true }
+      });
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Failed to print receipt for order ${order.id}:`, errorMessage);
+      
+      // Save as failed job
+      return prisma.printJob.create({
+        data: {
+          printerId: printer.id,
+          jobType: 'RECEIPT',
+          referenceId: order.id,
+          content: receiptContent.structured as Prisma.InputJsonValue,
+          rawContent: contentString,
+          status: 'FAILED',
+          errorMessage: errorMessage,
+          attempts: 1,
+          printedAt: new Date()
+        },
+        include: { printer: true }
+      });
+    }
   },
 
   async createKitchenPrintJob(printer: any, order: any, item: any) {
     const kitchenContent = this.generateKitchenContent(order, item, printer);
+    const contentString = typeof kitchenContent.raw === 'string' ? kitchenContent.raw : JSON.stringify(kitchenContent);
     
-    return prisma.printJob.create({
-      data: {
-        printerId: printer.id,
-        jobType: 'KITCHEN',
-        referenceId: order.id,
-        content: kitchenContent.structured,
-        rawContent: kitchenContent.raw,
-        status: 'PENDING'
-      },
-      include: {
-        printer: true
-      }
-    });
+    try {
+      // Print directly to the printer
+      await printWithPrinter(printer, contentString);
+      console.log(`Successfully printed kitchen order for item ${item.id}`);
+      
+      // Save to database as completed
+      return prisma.printJob.create({
+        data: {
+          printerId: printer.id,
+          jobType: 'KITCHEN',
+          referenceId: order.id,
+          content: kitchenContent.structured as Prisma.InputJsonValue,
+          rawContent: contentString,
+          status: 'COMPLETED',
+          printedAt: new Date()
+        },
+        include: { printer: true }
+      });
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Failed to print kitchen order for item ${item.id}:`, errorMessage);
+      
+      // Save as failed job
+      return prisma.printJob.create({
+        data: {
+          printerId: printer.id,
+          jobType: 'KITCHEN',
+          referenceId: order.id,
+          content: kitchenContent.structured as Prisma.InputJsonValue,
+          rawContent: contentString,
+          status: 'FAILED',
+          errorMessage: errorMessage,
+          attempts: 1,
+          printedAt: new Date()
+        },
+        include: { printer: true }
+      });
+    }
   },
 
   generateReceiptContent(order: any, printer: any) {

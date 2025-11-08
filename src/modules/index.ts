@@ -12,6 +12,7 @@ import reportingRoutes from "./reporting/report.routes"
 import inventoryRoutes from "./inventory/inventory.routes"
 import shiftRoutes from "./shift/shift.routes"
 import PrinterRoutes from "./pos_printer/printer-management.routes"
+import { dayEndRoutes } from "./reports"
 // import authRoutes from "./auth/auth.routes";
 
 const router = Router();
@@ -30,6 +31,7 @@ router.use("/reports", reportingRoutes);
 router.use("/inventory",inventoryRoutes)
 router.use("/shift",shiftRoutes)
 router.use("/printers",PrinterRoutes)
+router.use("/api/reports/day-end", dayEndRoutes)
 // router.use("/auth", authRoutes);
 
 export default router;
