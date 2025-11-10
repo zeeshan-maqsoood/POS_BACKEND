@@ -348,10 +348,11 @@ export default {
     },
   });
 
-    // First, get all paid orders to calculate summary statistics
+    // First, get all paid and completed orders to calculate summary statistics
     const paidOrders = await prisma.order.findMany({
       where: {
         paymentStatus: 'PAID',
+        status: 'COMPLETED',
         createdAt: { gte: from, lte: to },
         ...(branchName ? { branchName } : {}),
       },

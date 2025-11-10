@@ -94,6 +94,8 @@ export const DashboardService = {
           gte: startDate,
           lte: endDate 
         },
+        paymentStatus: PaymentStatus.PAID,
+        status: OrderStatus.COMPLETED,
         ...(branchId ? { branchId } : {})
       };
 
@@ -123,7 +125,8 @@ export const DashboardService = {
         prisma.order.aggregate({
           where: {
             ...orderWhere,
-            paymentStatus: 'PAID'
+            paymentStatus: 'PAID',
+            status:"COMPLETED"
           },
           _sum: {
             total: true
@@ -139,7 +142,8 @@ export const DashboardService = {
         prisma.order.findMany({
           where: {
             ...orderWhere,
-            paymentStatus: 'PAID'
+            paymentStatus: 'PAID',
+            status:"COMPLETED"
           },
           select: {
             total: true
@@ -341,6 +345,7 @@ export const DashboardService = {
 
       const whereClause: any = {
         paymentStatus: 'PAID',
+        status: 'COMPLETED',
         createdAt: { gte: startDate, lte: endDate },
       };
 
