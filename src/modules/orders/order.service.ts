@@ -1,24 +1,46 @@
 // Import types first to avoid circular dependencies
-import { OrderStatus, PaymentMethod, PaymentStatus, OrderType, UserRole, Prisma, Printer } from "@prisma/client";
+import { OrderStatus, PaymentMethod, PaymentStatus, OrderType, UserRole, Prisma, Order, OrderItem } from "@prisma/client";
 import { JwtPayload } from "../../types/auth.types";
 import { ApiError } from "../../utils/apiResponse";
-import { printWithPrinter } from "../pos_printer/printer-management.service";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
 import {
   CreateOrderInput,
   UpdateOrderInput,
   GetOrdersQuery,
   OrderItemInput,
-  OrderItem,
   OrderResponse
 } from "../../types/order.types";
 import { randomUUID } from 'crypto';
 import { inventoryService } from "../../services/inventory-deduction.service";
-import { printerService } from "../pos_printer/printer-management.service";
+import { printService } from "../../services/print.service";
 // Import prisma after the types to avoid circular dependencies
 import prisma from "../../loaders/prisma";
+
+// Helper function to handle order receipt
+async function handleOrderReceipt(order: Order & { items: any[] }) {
+  try {
+    // Get branch info for the receipt
+    const branch = order.branchId ? await prisma.branch.findUnique({
+      where: { id: order.branchId },
+      select: { name: true }
+    }) : null;
+
+    // Log receipt data
+    console.log(`[${new Date().toISOString()}] Receipt generated for order ${order.orderNumber}:`, {
+      orderNumber: order.orderNumber,
+      subtotal: order.subtotal,
+      tax: order.tax,
+      total: order.total,
+      branch: branch?.name || 'Main Branch',
+      itemCount: order.items.length
+    });
+    
+    return { success: true, message: 'Receipt logged successfully' };
+  } catch (error) {
+    console.error('Error handling receipt:', error);
+    // Don't throw the error to avoid failing the order creation
+    return { success: false, message: 'Failed to log receipt' };
+  }
+}
 
 // Extend the Prisma types to include the relations we need
 type OrderWithItems = Prisma.OrderGetPayload<{
@@ -46,175 +68,15 @@ const checkBranchAccess = async (userId: string, branchName: string) => {
   if (user.role === 'ADMIN') return true;
 
   // Manager and Kitchen Staff can only access their own branch
-  if ((user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') && user.branch === branchName) {
+  if ((user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') && 
+      user.branch && branchName && user.branch.toString() === branchName.toString()) {
     return true;
   }
 
   return false;
 };
 
-// Helper function to log receipt to console
-const logReceiptToConsole = (order: any) => {
-  console.log(`\n========== RECEIPT FOR ORDER ${order.orderNumber} ==========`);
-  console.log(`Order Type: ${order.orderType}`);
-  console.log(`Status: ${order.status}`);
-  console.log(`Payment Status: ${order.paymentStatus}`);
-  console.log(`Payment Method: ${order.paymentMethod}`);
-  console.log(`Customer: ${order.customerName || 'N/A'} | Phone: ${order.customerPhone || 'N/A'}`);
-  console.log(`Table: ${order.tableNumber || 'N/A'}`);
-  console.log(`Branch: ${order.branchName}`);
-  console.log(`Created By: ${order.createdBy?.name || 'N/A'} (${order.createdBy?.email || 'N/A'})`);
-  console.log(`Items:`);
-  order.items.forEach((item: any, index: number) => {
-    console.log(`  ${index + 1}. ${item.name} x${item.quantity} @ ${item.price} = ${item.total}`);
-  });
-  console.log(`Subtotal: ${order.subtotal}`);
-  console.log(`Tax: ${order.tax}`);
-  console.log(`Total: ${order.total}`);
-  console.log(`Notes: ${order.notes || 'N/A'}`);
-  console.log(`=====================================\n`);
-};
-
 export const orderService = {
-  // createOrder: async (data: CreateOrderInput, currentUser: JwtPayload) => {
-  //   if (!data.tableNumber && !data.customerName) {
-  //     throw ApiError.badRequest("Order must have either a table number or customer name");
-  //   }
-
-  //   console.log(currentUser,"currentUser")
-  //   // Get user's details
-  //   const user = await prisma.user.findUnique({
-  //     where: { id: currentUser.userId },
-  //     select: { branch: true, role: true }
-  //   });
-
-  //   if (!user) throw ApiError.notFound('User not found');
-
-  //   // Kitchen staff cannot create orders
-  //   if (user.role === 'KITCHEN_STAFF') {
-  //     throw ApiError.forbidden('Kitchen staff cannot create orders');
-  //   }
-
-  //   // If user is a manager and no branch is specified, use their branch
-  //   if (user.role === 'MANAGER' && !data.branchName && user.branch) {
-  //     data.branchName = user.branch;
-  //   }
-
-  //   // If branch is provided or set from manager, verify the user has access to it
-  //   if (data.branchName) {
-  //     // For managers, we already know they have access to their own branch
-  //     if (!(user.role === 'MANAGER' && user.branch === data.branchName)) {
-  //       const hasAccess = await checkBranchAccess(currentUser.userId, data.branchName);
-  //       if (!hasAccess) {
-  //         throw ApiError.forbidden('You do not have permission to create orders for this branch');
-  //       }
-  //     }
-  //   }
-
-  //   try {
-  //     // Get all menu items with their tax rates
-  //     const menuItemIds = data.items.map(item => item.menuItemId);
-  //     const menuItems = await prisma.menuItem.findMany({
-  //       where: { id: { in: menuItemIds } },
-  //       select: { id: true, taxRate: true, taxExempt: true }
-  //     });
-
-  //     // Create a map of menu item IDs to their tax rates
-  //     const menuItemTaxInfo = new Map(
-  //       menuItems.map(item => [item.id, { 
-  //         taxRate: item.taxExempt ? 0 : item.taxRate,
-  //         taxExempt: item.taxExempt
-  //       }])
-  //     );
-
-  //     // Calculate order items with proper tax
-  //     const orderItems = data.items.map(item => {
-  //       const itemInfo = menuItemTaxInfo.get(item.menuItemId) || { taxRate: 0, taxExempt: false };
-  //       const itemSubtotal = item.price * item.quantity;
-  //       const itemTax = itemInfo.taxExempt ? 0 : (itemSubtotal * (itemInfo.taxRate || 0)) / 100;
-
-  //       const payload= {
-  //         menuItemId: item.menuItemId,
-  //         name: item.name || `Item ${item.menuItemId}`,
-  //         price: item.price,
-  //         quantity: item.quantity,
-  //         taxRate: itemInfo.taxRate,
-  //         tax: itemTax,
-  //         total: itemSubtotal + itemTax,
-  //         notes: item.notes,
-  //         modifiers: item.modifiers
-  //       };
-  //       return payload;
-  //     });
-
-  //     // Calculate order totals
-  //     const subtotal = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  //     const tax = orderItems.reduce((sum, item) => sum + item.tax, 0);
-  //     const total = subtotal + tax - (data.discount || 0);
-
-  //     // Generate a unique order number if not provided
-  //     const orderNumber = data.orderNumber || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-  //     // Verify all menu items exist
-  //     if (menuItems.length !== new Set(menuItemIds).size) {
-  //       const foundIds = new Set(menuItems.map(item => item.id));
-  //       const missingIds = menuItemIds.filter(id => !foundIds.has(id));
-  //       throw ApiError.badRequest(`The following menu items do not exist: ${missingIds.join(', ')}`);
-  //     }
-
-  //     const order = await prisma.order.create({
-  //       data: {
-  //         id: randomUUID(),
-  //         orderNumber,
-  //         orderType: data.orderType ?? OrderType.DINE_IN,
-  //         status: data.status || 'PENDING',
-  //         paymentStatus: data.paymentStatus || 'PENDING',
-  //         paymentMethod: data.paymentMethod,
-  //         subtotal,
-  //         tax,
-  //         total,
-  //         tableNumber: data.tableNumber,
-  //         customerName: data.customerName,
-  //         customerEmail: data.customerEmail,
-  //         customerPhone: data.customerPhone,
-  //         notes: data.notes,
-  //         branchName: data.branchName,
-  //         createdById: currentUser.userId,
-  //         items: {
-  //           create: orderItems.map(item => ({
-  //             id: randomUUID(),
-  //             menuItemId: item.menuItemId,
-  //             name: item.name,
-  //             price: item.price,
-  //             quantity: item.quantity,
-  //             taxRate: item.taxRate,
-  //             tax: item.tax,
-  //             total: item.total,
-  //             notes: item.notes,
-  //             modifiers: item.modifiers
-  //           }))
-  //         }
-  //       },
-  //       include: {
-  //         items: true,
-  //         createdBy: {
-  //           select: {
-  //             id: true,
-  //             name: true,
-  //             email: true
-  //           }
-  //         }
-  //       }
-  //     });
-  //     // console.log(order,"order");
-
-  //     return order;
-  //   } catch (error) {
-  //     console.error('Error creating order:', error);
-  //     throw ApiError.internal('Failed to create order');
-  //   }
-  // },
-
   getOrders: async (query: GetOrdersQuery, currentUser: JwtPayload): Promise<OrderResponse> => {
     // Get user's branch and role with more detailed selection
     const user = await prisma.user.findUnique({
@@ -317,7 +179,6 @@ export const orderService = {
       skip,
       take: pageSize,
     });
-    // console.log(orders,"orders")
 
     // Check permissions for each order if needed
     if (user) {
@@ -325,7 +186,8 @@ export const orderService = {
         // If user is a manager or kitchen staff
         if (user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') {
           // Allow managers to view all orders from their branch, not just their own
-          if (user.role === 'KITCHEN_STAFF' && user.branch && order.branchName !== user.branch) {
+          if (user.role === 'KITCHEN_STAFF' && user.branch && 
+              order.branchName && user.branch.toString() !== order.branchName.toString()) {
             // Kitchen staff can only see orders from their branch
             throw ApiError.forbidden('You do not have permission to view this order');
           }
@@ -350,8 +212,6 @@ export const orderService = {
         totalPages: Math.ceil(total / pageSize)
       }
     };
-
-    return order;
   },
 
   updateOrder: async (id: string, data: UpdateOrderInput, currentUser: JwtPayload) => {
@@ -445,15 +305,6 @@ export const orderService = {
       }
     });
 
-    // Print receipt after successful order update
-    try {
-      console.log('Attempting to print receipt for updated order:', order.id);
-      await printerService.printOrder(order);
-    } catch (printError) {
-      console.error('Error printing receipt for updated order:', printError);
-      // Don't fail the order update if printing fails
-    }
-
     return order;
   },
 
@@ -478,7 +329,7 @@ export const orderService = {
     // If user is a manager
     if (user.role === 'MANAGER') {
       // Allow managers to delete any order from their branch, not just their own
-      if (user.branch && order.branchName !== user.branch) {
+      if (user.branch && order.branchName !== user.branch.name) {
         throw ApiError.forbidden('You do not have permission to delete this order');
       }
     }
@@ -502,10 +353,14 @@ export const orderService = {
 export default orderService;
 
 export async function createOrder(data: CreateOrderInput, currentUser: JwtPayload): Promise<OrderWithItems> {
+  console.log('[DEBUG] createOrder service called with data:', JSON.stringify(data, null, 2));
+  console.log('[DEBUG] Current user ID:', currentUser?.userId);
+  
   try {
-    console.log("create order api call with data:", data);
-    if (!currentUser.userId) {
-      throw new Error('User ID is required');
+    if (!currentUser?.userId) {
+      const error = new Error('User ID is required');
+      console.error('[ERROR] No user ID found in createOrder');
+      throw error;
     }
 
     const { items, ...orderData } = data;
@@ -638,53 +493,19 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
     console.log('Order created successfully:', order);
     
-    // Print receipt after successful order creation
-    try {
-      console.log('Attempting to print receipt for order:', order.id);
-      
-      // Get the receipt printer for this branch
-      const receiptPrinter = await prisma.printer.findFirst({
-        where: {
-          branchName: order.branchName,
-          type: 'RECEIPT',
-          isActive: true
-        }
-      });
-
-      if (receiptPrinter) {
-        // Format the receipt content
-        const receiptContent = `
-          =============================
-               ORDER RECEIPT
-          =============================
-          Order #: ${order.orderNumber}
-          Date: ${new Date(order.createdAt).toLocaleString()}
-          Status: ${order.status}
-          Type: ${order.orderType}
-          -----------------------------
-          ITEMS:
-          ${order.items.map(item => `
-          ${item.quantity}x ${item.name} - $${(item.price * item.quantity).toFixed(2)}
-            ${item.notes ? `Notes: ${item.notes}` : ''}`).join('')}
-          -----------------------------
-          Subtotal: $${order.subtotal.toFixed(2)}
-          Tax: $${order.tax.toFixed(2)}
-          Total: $${order.total.toFixed(2)}
-          =============================
-          Thank you for your order!
-          =============================
-        `.replace(/^ +/gm, ''); // Remove leading spaces for cleaner output
-
-        // Print the receipt
-        await printWithPrinter(receiptPrinter, receiptContent);
-        console.log('Receipt sent to printer');
-      } else {
-        console.warn('No active receipt printer found for branch:', order.branchName);
-      }
-    } catch (printError) {
-      console.error('Error printing receipt:', printError);
-      // Don't fail the order if printing fails
-    }
+    // Print receipt in the background (don't await to avoid blocking the response)
+    console.log('[DEBUG] Sending order to print service...');
+    
+    // Prepare order data for printing
+    const receiptData = {
+      ...order,
+      items: order.items || []
+    };
+    
+    // Print the receipt in the background
+    printService.printOrderReceipt(receiptData as any)
+      .then(() => console.log('[DEBUG] Receipt sent to printer successfully'))
+      .catch(error => console.error('[ERROR] Failed to print receipt:', error));
     
     return order;
   } catch (error) {
@@ -693,21 +514,6 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
   }
 }
 
-
-interface GetOrdersServiceParams {
-  status?: OrderStatus;
-  paymentStatus?: PaymentStatus;
-  orderType?: OrderType;
-  branchName?: string;
-  restaurantId?: string;
-  startDate?: Date;
-  endDate?: Date;
-  search?: string;
-  page: number;
-  pageSize: number;
-  sortBy: string;
-  sortOrder: 'asc' | 'desc';
-}
 
 export async function getOrdersService(params: GetOrdersServiceParams, currentUser: JwtPayload) {
   // Get user's branch and role with more details
@@ -811,7 +617,6 @@ export async function getOrdersService(params: GetOrdersServiceParams, currentUs
     skip,
     take: pageSize,
   });
-  // console.log(orders,"orders")
 
   return {
     data: orders,
@@ -849,7 +654,7 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
       // Allow managers to update payment status of any order from their branch
       if (user.role === 'KITCHEN_STAFF') {
         // Kitchen staff can only update orders from their branch
-        if (user.branch && existingOrder.branchName !== user.branch) {
+        if (user.branch && existingOrder.branchName !== user.branch.name) {
           throw new Error('You do not have permission to update this order');
         }
       }
@@ -899,35 +704,13 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
       ] : [])
     ]);
 
-    // Print receipt when payment status is updated to PAID
-    if (paymentStatus === 'PAID') {
-      try {
-        const result = await PrintService.printOrderReceipt(updatedOrder);
-        console.log('PrintService result for payment update:', result); // Debug: Log the full result
-        const { manager, kitchen } = result;
-
-        // Log full receipt to console if printing succeeds
-        if (manager || kitchen) {
-          console.log('\n========== PHYSICAL RECEIPT CONTENT =========='); // Indicate it's the physical print content
-          logReceiptToConsole(updatedOrder); // Log the receipt details to console
-          console.log('==========================================\n');
-        }
-
-        if (manager) console.log('Manager receipt printed successfully for order:', updatedOrder.orderNumber);
-        if (kitchen) console.log('Kitchen receipt printed successfully for order:', updatedOrder.orderNumber);
-        if (!manager) console.warn('Failed to print manager receipt');
-        if (!kitchen) console.warn('Failed to print kitchen receipt');
-      } catch (printError) {
-        console.error('Failed to print receipt:', printError);
-      }
-    }
-
-    return createdOrder;
+    return updatedOrder;
   } catch (error) {
     console.error('Error creating order:', error);
     throw new Error('Failed to create order');
   }
 }
+
 
 export async function getOrderStatsService({ startDate, endDate, branchName, restaurantId }: {
   startDate?: Date;
@@ -1226,7 +1009,7 @@ export async function updateOrderStatusService(id: string, status: OrderStatus, 
   // Access check logic (keep your existing logic)
   if (user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') {
     if (user.role === 'KITCHEN_STAFF') {
-      if (user.branch && existingOrder.branchName !== user.branch) {
+      if (user.branch && existingOrder.branchName !== user.branch.name) {
         throw new Error('You do not have permission to update this order');
       }
     }
@@ -1245,24 +1028,15 @@ export async function updateOrderStatusService(id: string, status: OrderStatus, 
       include: { items: true }
     });
 
-    // Handle inventory for status changes
-    if (status === 'CANCELLED' && existingOrder.status !== 'CANCELLED') {
-      // Restore inventory when order is cancelled
-      try {
-        await inventoryService.restoreInventoryForOrder(updatedOrder);
-        
-        // Update order notes
-        await prisma.order.update({
-          where: { id },
-          data: { 
-            notes: updatedOrder.notes ? 
-              `${updatedOrder.notes}\n[Inventory restored due to cancellation]` : 
-              '[Inventory restored due to cancellation]'
-          }
-        });
-      } catch (inventoryError) {
-        console.error('Inventory restoration failed during cancellation:', inventoryError);
-      }
+    // After order is updated, handle receipt if status changed to COMPLETED
+    if (status === 'COMPLETED' && existingOrder.status !== 'COMPLETED') {
+      await handleOrderReceipt({
+        ...existingOrder,
+        items: existingOrder.items.map(item => ({
+          ...item,
+          modifiers: item.modifiers || []
+        }))
+      });
     }
 
     return updatedOrder;
@@ -1271,89 +1045,6 @@ export async function updateOrderStatusService(id: string, status: OrderStatus, 
     throw new Error('Failed to update order status');
   }
 }
-
-
-// export async function updateOrder(id: string, data: {
-//   tableNumber: any;
-//   customerName: any;
-//   subtotal: any;
-//   tax: any;
-//   discount: number;
-//   total: any;
-//   paymentStatus: any;
-//   paymentMethod: any;
-//   status: any;
-//   orderType: any;
-//   branchName: any;
-//   createdAt: any; notes: any; 
-// }, currentUser?: JwtPayload) {
-//   // First get the existing order to check access if currentUser is provided
-//   if (currentUser) {
-//     const existingOrder = await prisma.order.findUnique({
-//       where: { id }
-//     });
-
-//     if (!existingOrder) {
-//       throw new Error('Order not found');
-//     }
-
-//     // Get user's details
-//     const user = await prisma.user.findUnique({
-//       where: { id: currentUser.userId },
-//       select: { branch: true, role: true, id: true }
-//     });
-
-//     if (!user) throw new Error('User not found');
-
-//     // If user is a manager
-//     if (user.role === 'MANAGER' || user.role === 'KITCHEN_STAFF') {
-//       // Allow managers to update any order from their branch
-//       if (user.role === 'KITCHEN_STAFF') {
-//         // Kitchen staff can only update orders from their branch
-//         if (user.branch && existingOrder.branchName !== user.branch) {
-//           throw new Error('You do not have permission to update this order');
-//         }
-//       }
-//       // For managers, allow updating any order from their branch
-//     }
-//     // If user is admin and order has a branch, check branch access
-//     else if (existingOrder.branchName) {
-//       const hasAccess = await checkBranchAccess(currentUser.userId, existingOrder.branchName);
-//       if (!hasAccess) {
-//         throw new Error('You do not have permission to update this order');
-//       }
-//     }
-//   }
-// console.log(data,"data")
-//   try {
-//     // Update only the notes field
-//     const updatedOrder = await prisma.order.update({
-//       where: { id },
-//       data: {
-//         tableNumber:data.tableNumber||'DEFAULT',
-//         customerName:data.customerName||'DEFAULT',
-//         subtotal:data?.subtotal||0,
-//         tax:data?.tax||0,
-//         discount:data?.discount||0,
-//         total:data?.total||0,
-//         paymentStatus:data?.paymentStatus||'PENDING',
-//         paymentMethod:data?.paymentMethod||'CASH',
-//         notes:data?.notes||'DEFAULT',
-//         status:data?.status||'PENDING',
-//         orderType:data?.orderType||'DELIVERY',
-//         branchName:data?.branchName||'DEFAULT',
-//         createdAt:data?.createdAt||new Date(),
-//        },
-//       include: { items: true }
-//     });
-//     console.log(updatedOrder, "updatedOrder");
-
-//     return updatedOrder;
-//   } catch (error) {
-//     console.error('Error updating order:', error);
-//     throw new Error('Failed to update order');
-//   }
-// }
 
 
 export async function updateOrder(
@@ -1517,7 +1208,7 @@ export async function updateOrder(
         };
 
         // Print in the background
-        PrintService.printOrderReceipt(orderWithNewItems)
+        printService.printOrderReceipt(orderWithNewItems as any)
           .then(result => {
             console.log('PrintService result for update:', result); // Debug: Log the full result
             const { manager, kitchen } = result;
@@ -1543,7 +1234,7 @@ export async function updateOrder(
       if (completeOrder) {
         // Note: Full receipt logging is now handled in the print success callback above
         // Print receipt for the updated order
-        PrintService.printOrderReceipt(completeOrder)
+        printService.printOrderReceipt(completeOrder as any)
           .then(result => {
             console.log('PrintService result for full update:', result); // Debug: Log the full result
             const { manager, kitchen } = result;
@@ -1594,7 +1285,7 @@ export async function deleteOrderService(id: string, currentUser?: JwtPayload) {
     // If user is a manager
     if (user.role === 'MANAGER') {
       // Allow managers to delete any order from their branch, not just their own
-      if (user.branch && order.branchName !== user.branch) {
+      if (user.branch && order.branchName !== user.branch.name) {
         throw new Error('You do not have permission to delete this order');
       }
     }

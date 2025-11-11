@@ -5,7 +5,8 @@ import { Order, OrderStatus, PaymentStatus, OrderType, PaymentMethod } from '@pr
 import { JwtPayload } from "../../types/auth.types";
 import { parseISO, isDate } from 'date-fns';
 import { getIo } from "../../../app";
-import PrintService from "../../services/print.service";
+import { NotificationService } from "../../services/notification.service";
+
 interface OrderQueryParams {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
@@ -21,7 +22,6 @@ interface OrderQueryParams {
   sortOrder?: 'asc' | 'desc';
 }
 
-// Define the expected order type based on what the service returns
 type OrderWithItems = Order & {
   items: Array<{
     id: string;
@@ -36,35 +36,18 @@ type OrderWithItems = Order & {
   }>;
 };
 
-import { printReceipt } from "../../services/receipt.service";
-import { NotificationService } from "../../services/notification.service";
-
-// Wrapper function to handle receipt printing
-async function printOrderReceipt(orderId: string): Promise<void> {
-  console.log(`\n=== printOrderReceipt called for order ${orderId} ===`);
-  try {
-    console.log('Calling printReceipt function...');
-    const success = await printReceipt(orderId);
-    if (!success) {
-      console.error(`❌ Failed to print receipt for order ${orderId}`);
-    } else {
-      console.log(`✅ Successfully processed receipt for order ${orderId}`);
-    }
-  } catch (error: unknown) {
-    console.error(`❌ Error in printOrderReceipt for order ${orderId}:`, error);
-  }
-}
-
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
+  console.log('[DEBUG] createOrder controller called');
   try {
     const currentUser = req.user as unknown as JwtPayload;
+    console.log('[DEBUG] Current user:', currentUser.userId);
     const order = await orderService.createOrder(req.body, currentUser) as OrderWithItems;
     if (order && order.branchName) {
       NotificationService.notifyNewOrder(order as any).catch(error => {
         console.error('Failed to send new order notification:', error);
       });
     }
-      const io=getIo()
+    const io = getIo()
     io.emit('new-order', {
       order,
       createdByRole: currentUser.role,
@@ -73,18 +56,6 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
     if (!order || !order.id) {
       throw new Error('Failed to create order: Invalid order data returned from service');
     }
-    // Print receipt in the background (don't await to avoid delaying the response)
-    console.log(`🖨️  Queueing receipt print for order ${order.id}`);
-    printOrderReceipt(order.id).then(success => {
-      if (success) {
-        console.log(`✅ Successfully printed receipt for order ${order.id}`);
-      } else {
-        console.error(`❌ Failed to print receipt for order ${order.id}`);
-      }
-    }).catch((error: Error) => {
-      console.error(`❌ Error printing receipt for order ${order.id}:`, error);
-    });
-    
     ApiResponse.send(res, ApiResponse.success<OrderWithItems>(order, "Order created successfully", 201));
   } catch (error: any) {
     console.error('Error creating order:', error);
@@ -184,12 +155,6 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
       updatedBy: currentUser.userId,
       message: `Payment status updated to ${paymentStatus}`
     });
-
-    // Print receipt when payment is completed
-    if (paymentStatus === 'PAID') {
-      console.log('Payment is PAID, calling printOrderReceipt...');
-      await printOrderReceipt(id);
-    }
 
     ApiResponse.send(res, ApiResponse.success(order, 'Payment status updated successfully'));
   } catch (error: any) {

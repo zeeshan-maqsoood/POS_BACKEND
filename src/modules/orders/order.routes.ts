@@ -40,5 +40,8 @@ router.put(
 );
 // Delete an order
 router.delete("/:id", orderController.deleteOrder);
-
+ router.get("/callback",(req,res)=>{
+  console.log("callback",req.query)
+  console.log(req,"req")
+ })
 export default router;

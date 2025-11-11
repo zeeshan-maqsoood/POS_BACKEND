@@ -1,369 +1,655 @@
-import { exec } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+// import fetch from 'node-fetch';
+// import { Order, OrderItem } from '@prisma/client';
+// import { getSocketService } from '../config/socket';
+
+// type OrderWithItems = Order & {
+//   items: Array<OrderItem & {
+//     modifiers?: Array<{
+//       name: string;
+//       price: number;
+//     }>;
+//   }>;
+// };
+
+// class PrintService {
+//   private apiKey: string;
+//   private baseUrl = 'https://api.printnode.com';
+
+//   constructor() {
+//     this.apiKey = process.env.PRINTNODE_API_KEY || '';
+//     if (!this.apiKey) {
+//       console.warn('PRINTNODE_API_KEY is not set. Printing will be disabled.');
+//     }
+//   }
+
+//   private async makeRequest(endpoint: string, method: string = 'GET', body?: any) {
+//     if (!this.apiKey) {
+//       console.warn('PrintNode API key not configured');
+//       return null;
+//     }
+
+//     try {
+//       const url = `${this.baseUrl}${endpoint}`;
+//       const response = await fetch(url, {
+//         method,
+//         headers: {
+//           'Authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`,
+//           'Content-Type': 'application/json',
+//           'Accept': 'application/json; charset=utf-8',
+//         },
+//         body: body ? JSON.stringify(body) : undefined,
+//       });
+
+//       if (!response.ok) {
+//         const error = await response.text();
+//         throw new Error(`PrintNode API error: ${error}`);
+//       }
+
+//       return response.json();
+//     } catch (error) {
+//       console.error('PrintNode API request failed:', error);
+//       return null;
+//     }
+//   }
+
+//   private async getPrinters() {
+//     try {
+//       const response = await this.makeRequest('/printers');
+//       if (!response || !Array.isArray(response)) {
+//         console.error('Invalid printers response:', response);
+//         return [];
+//       }
+      
+//       // Log all available printers for debugging
+//       console.log('Available printers:');
+//       response.forEach((printer: any) => {
+//         console.log(`- ${printer.name} (${printer.id})`);
+//       });
+      
+//       return response;
+//     } catch (error) {
+//       console.error('Error fetching printers:', error);
+//       return [];
+//     }
+//   }
+  
+//   // Helper method to identify virtual printers
+//   private isVirtualPrinter(printerName: string): boolean {
+//     const virtualPrinters = [
+//       'microsoft xps',
+//       'microsoft print to pdf',
+//       'fax',
+//       'onenote',
+//       'adobe pdf',
+//       'foxit reader pdf printer',
+//       'send to onenote',
+//       'pdf',
+//       'xps',
+//       'document writer'
+//     ];
+    
+//     return virtualPrinters.some(vp => 
+//       printerName.toLowerCase().includes(vp)
+//     );
+//   }
+
+//   async printOrderReceipt(order: OrderWithItems, printerName?: string) {
+//     if (!this.apiKey) {
+//       const errorMsg = 'PrintNode not configured, skipping receipt printing';
+//       console.warn(errorMsg);
+//       this.notifyPrintStatus(order, 'error', errorMsg);
+//       return null;
+//     }
+
+//     try {
+//       // If no printer name is provided, use the first available printer
+//       let printers = await this.getPrinters();
+//       if (!printers || printers.length === 0) {
+//         const errorMsg = 'No printers available';
+//         this.notifyPrintStatus(order, 'error', errorMsg);
+//         throw new Error(errorMsg);
+//       }
+
+//       // Log all available printers for debugging
+//       console.log('Available printers:');
+//       printers.forEach((p: any) => {
+//         console.log(`- ${p.name} (${p.id})`);
+//       });
+
+//       let printer = null;
+      
+//       // If a specific printer is requested, try to find it
+//       if (printerName) {
+//         printer = printers.find((p: { name: string }) => 
+//           p.name.toLowerCase().includes(printerName.toLowerCase())
+//         );
+        
+//         if (!printer) {
+//           console.warn(`Requested printer '${printerName}' not found. Falling back to first available printer.`);
+//         }
+//       }
+      
+//       // If no specific printer was requested or found, find the first non-virtual printer
+//       if (!printer) {
+//         // First try to find a non-virtual printer
+//         printer = printers.find((p: { name: string }) => !this.isVirtualPrinter(p.name));
+        
+//         // If no non-virtual printer found, use the first available printer
+//         if (!printer && printers.length > 0) {
+//           console.warn('No non-virtual printers found. Using first available printer.');
+//           printer = printers[0];
+//         }
+//       }
+
+//       if (!printer) {
+//         const errorMsg = 'No printers available for printing';
+//         this.notifyPrintStatus(order, 'error', errorMsg);
+//         throw new Error(errorMsg);
+//       }
+      
+//       console.log(`Selected printer: ${printer.name} (${printer.id})`);
+
+//       const receipt = this.formatReceipt(order);
+      
+//       const printJob = {
+//         printerId: printer.id,
+//         title: `Order #${order.orderNumber}`,
+//         contentType: 'raw_base64',
+//         content: Buffer.from(receipt).toString('base64'),
+//         source: 'POS System',
+//         // Ensure raw printing mode is used
+//         options: {
+//           media: 'A4',
+//           nopdf: true
+//         }
+//       };
+
+//       console.log(`Sending print job to printer: ${printer.name} (${printer.id})`);
+
+//       // Notify that print job is being sent
+//       this.notifyPrintStatus(order, 'sending', 'Sending to printer...');
+
+//       const result = await this.makeRequest('/printjobs', 'POST', printJob);
+      
+//       // Notify that print job was sent successfully
+//       this.notifyPrintStatus(order, 'success', 'Receipt sent to printer');
+      
+//       return result;
+//     } catch (error) {
+//       const errorMsg = error instanceof Error ? error.message : 'Failed to print receipt';
+//       console.error('Print error:', errorMsg);
+//       this.notifyPrintStatus(order, 'error', errorMsg);
+//       throw error;
+//     }
+//   }
+
+//   private formatReceipt(order: OrderWithItems & { subtotal?: number; tax?: number; total?: number }): string {
+//     // Ensure we're using plain text with proper line endings
+//     const line = '--------------------------------';
+//     const newLine = '\n';
+    
+//     // Start with some blank lines to ensure the receipt starts printing at the right position
+//     let receipt = newLine.repeat(5);
+    
+//     // Center the receipt content
+//     const centerText = (text: string, width = 32) => {
+//       if (text.length >= width) return text;
+//       const padding = Math.floor((width - text.length) / 2);
+//       return ' '.repeat(padding) + text;
+//     };
+    
+//     // Add receipt header
+//     receipt += centerText('YOUR RESTAURANT NAME') + newLine;
+//     receipt += centerText('123 Restaurant St.') + newLine;
+//     receipt += centerText('City, Country') + newLine.repeat(2);
+//     receipt += centerText('RECEIPT') + newLine;
+//     receipt += line + newLine;
+    
+//     // Add order info
+//     receipt += `Order #: ${order.orderNumber}${newLine}`;
+//     receipt += `Date: ${new Date().toLocaleString()}${newLine}`;
+//     receipt += `Order Type: ${order.orderType || 'Dine-in'}${newLine}`;
+//     receipt += line + newLine;
+    
+//     // Add items
+//     receipt += 'ITEM'.padEnd(20) + 'QTY  PRICE   TOTAL' + newLine;
+//     receipt += line + newLine;
+    
+//     order.items.forEach((item: any) => {
+//       const itemTotal = (item.quantity * item.price).toFixed(2);
+//       receipt += `${item.name.substring(0, 18).padEnd(20)}${item.quantity.toString().padEnd(5)}${item.price.toFixed(2).padStart(6)}${itemTotal.padStart(8)}${newLine}`;
+      
+//       // Add modifiers if any
+//       if (item.modifiers && Array.isArray(item.modifiers)) {
+//         item.modifiers.forEach((modifier: any) => {
+//           receipt += `  - ${modifier.name}`.padEnd(21) + modifier.price.toFixed(2).padStart(14) + newLine;
+//         });
+//       }
+//     });
+    
+//     // Add totals
+//     receipt += line + newLine;
+//     receipt += `Subtotal:`.padEnd(15) + (order.subtotal || 0).toFixed(2).padStart(17) + newLine;
+//     receipt += `Tax:`.padEnd(15) + (order.tax || 0).toFixed(2).padStart(17) + newLine;
+//     receipt += line + newLine;
+//     receipt += `TOTAL:`.padEnd(15) + (order.total || 0).toFixed(2).padStart(17) + newLine;
+//     receipt += line + newLine.repeat(2);
+    
+//     // Add footer
+//     receipt += centerText('Thank you for dining with us!') + newLine;
+//     receipt += centerText('Please come again!') + newLine.repeat(3);
+    
+//     // Add cut command (ESC/POS) - uncomment if your printer supports it
+//     // receipt += '\x1B@\x1DV1\x00'; // Initialize, cut paper
+    
+//     return receipt;
+//   }
+
+//   private async notifyPrintStatus(order: OrderWithItems, status: 'sending' | 'success' | 'error', message: string) {
+//     try {
+//       const socketService = getSocketService();
+//       const { io } = socketService;
+      
+//       // Emit to the branch room if branchName exists
+//       if (order.branchName) {
+//         io.to(`branch-${order.branchName}`).emit('print-status', {
+//           orderId: order.id,
+//           orderNumber: order.orderNumber,
+//           status,
+//           message,
+//           timestamp: new Date().toISOString()
+//         });
+//       }
+      
+//       // Also emit a general notification
+//       io.emit('print-notification', {
+//         orderId: order.id,
+//         orderNumber: order.orderNumber,
+//         status,
+//         message,
+//         timestamp: new Date().toISOString()
+//       });
+//     } catch (error) {
+//       console.error('Failed to send print status notification:', error);
+//     }
+//   }
+// }
+
+// export const printService = new PrintService();
+import fetch from 'node-fetch';
+import { Order, OrderItem } from '@prisma/client';
+import { getSocketService } from '../config/socket';
+
+type OrderWithItems = Order & {
+  items: Array<OrderItem & {
+    modifiers?: Array<{
+      name: string;
+      price: number;
+    }>;
+  }>;
+};
 
 class PrintService {
-    // ... (rest of the class remains the same)
+  private apiKey: string;
+  private baseUrl = 'https://api.printnode.com';
 
-    /**
-     * Print file to a specific printer
-     */
-    public static async printToPrinterDirect(content: string, printerName?: string): Promise<boolean> {
-        const filePath = path.join(process.cwd(), 'temp', `receipt_${Date.now()}.txt`);
-        
-        try {
-            console.log(`   • Creating temporary file at: ${filePath}`);
-            
-            // Ensure temp directory exists
-            const tempDir = path.dirname(filePath);
-            if (!fs.existsSync(tempDir)) {
-                console.log(`   • Creating temp directory: ${tempDir}`);
-                fs.mkdirSync(tempDir, { recursive: true });
-            }
-            
-            // Write content to file with proper encoding
-            console.log('   • Writing receipt content to file...');
-            fs.writeFileSync(filePath, content, 'utf8');
-            console.log(`   ✅ Receipt file created at: ${filePath}`);
-            
-            // If no printer specified or it's a fax printer, try to find a better one
-            if (!printerName || printerName.toLowerCase().includes('fax')) {
-                console.log('   • No printer specified or fax printer detected, searching for better options...');
-                const availablePrinters = await this.listPrinters();
-                if (availablePrinters.length > 0) {
-                    printerName = availablePrinters[0];
-                    console.log(`   • Selected printer: ${printerName}`);
-                } else if (!printerName) {
-                    throw new Error('No printers available');
-                }
-            } else {
-                console.log(`   • Using specified printer: ${printerName}`);
-            }
-            
-            // Method 1: Try direct printing using msprint (works well with receipt printers)
-            try {
-                console.log(`   • Attempting to print using direct print method...`);
-                
-                // Double the backslashes for Windows paths
-                const escapedPath = filePath.replace(/\\/g, '\\\\');
-                const escapedPrinter = printerName.replace(/"/g, '\\"');
-                
-                // Use PowerShell to print the file directly
-                const psCommand = `
-                try {
-                    # Check if printer exists
-                    $printer = Get-Printer -Name "${escapedPrinter}" -ErrorAction Stop
-                    Write-Output "Found printer: $($printer.Name) (Status: $($printer.PrinterStatus))"
-                    
-                    # Read the file content
-                    $content = Get-Content -Path "${escapedPath}" -Raw -Encoding UTF8
-                    if (-not $content) { 
-                        throw "File is empty or could not be read"
-                    }
-                    
-                    # Print the content
-                    $content | Out-Printer -Name "${escapedPrinter}" -ErrorAction Stop
-                    
-                    # Verify the print job was queued
-                    $job = Get-PrintJob -PrinterName "${escapedPrinter}" | 
-                           Where-Object { $_.SubmittedTime -gt (Get-Date).AddMinutes(-1) } | 
-                           Select-Object -First 1
-                    
-                    if ($job) {
-                        Write-Output "Print job submitted successfully. Job ID: $($job.Id)"
-                        exit 0
-                    } else {
-                        Write-Output "Warning: Print job may not have been queued"
-                        exit 0  # Still consider this a success as the print command itself succeeded
-                    }
-                } catch {
-                    Write-Error ("ERROR: " + $_.Exception.Message)
-                    exit 1
-                }
-                `;
-                
-                // Create a temporary PowerShell script
-                const psScriptPath = path.join(path.dirname(filePath), `print_${Date.now()}.ps1`);
-                fs.writeFileSync(psScriptPath, psCommand, 'utf8');
-                
-                console.log(`   • Created PowerShell script at: ${psScriptPath}`);
-                
-                // Execute the PowerShell script
-                const command = `powershell -ExecutionPolicy Bypass -File "${psScriptPath}"`;
-                console.log(`   • Executing: ${command}`);
-                
-                const result = await new Promise<string>((resolve, reject) => {
-                    exec(command, { windowsHide: true, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-                        if (error) {
-                            console.error('   ❌ Print command failed:', { error, stdout, stderr });
-                            reject(stderr || 'Print command failed');
-                        } else {
-                            console.log('   ✅ Print command output:', stdout);
-                            resolve(stdout);
-                        }
-                    });
-                });
-                
-                // Clean up the PowerShell script
-                try {
-                    fs.unlinkSync(psScriptPath);
-                } catch (e) {
-                    console.error('   • Error cleaning up PowerShell script:', e);
-                }
-                
-                if (result && result.includes('Print job submitted successfully')) {
-                    console.log('   ✅ Print job submitted successfully');
-                    return true;
-                }
-                
-                throw new Error('Print command did not complete successfully');
-                
-            } catch (printError) {
-                console.log('   • Windows print command failed, trying PowerShell method...', printError);
-            }
-            
-            // Method 2: Use PowerShell with Out-Printer (more reliable for some printers)
-            try {
-                console.log(`   • Attempting to print using PowerShell...`);
-                const psCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "
-                    try {
-                        # First check if printer exists and is online
-                        $printer = Get-Printer -Name '${printerName.replace(/'/g, "''")}' -ErrorAction Stop;
-                        Write-Output (\"Printer found: \" + $printer.Name + \" (Status: \" + $printer.PrinterStatus + \")\");
-                        
-                        if ($printer.PrinterStatus -ne 'Normal') {
-                            throw (\"Printer is not ready. Status: \" + $printer.PrinterStatus);
-                        }
-                        
-                        # Read the file content
-                        $content = Get-Content -Path '${filePath.replace(/'/g, "''")}' -Raw -Encoding UTF8;
-                        if (-not $content) { 
-                            throw 'File content is empty or could not be read';
-                        }
-                        
-                        # Try to print
-                        $content | Out-Printer -Name '${printerName.replace(/'/g, "''")}' -ErrorAction Stop;
-                        
-                        # Verify job was queued
-                        $job = Get-PrintJob -PrinterName '${printerName.replace(/'/g, "''")}' | 
-                               Where-Object { $_.SubmittedTime -gt (Get-Date).AddMinutes(-1) } | 
-                               Select-Object -First 1;
-                        
-                        if ($job) {
-                            Write-Output (\"Print job submitted successfully. Job ID: \" + $job.Id);
-                            exit 0;
-                        } else {
-                            Write-Output 'Warning: Print job may not have been queued';
-                            exit 0;  # Still consider this a success as the print command itself succeeded
-                        }
-                    } catch {
-                        Write-Error (\"ERROR: \" + $_.Exception.Message);
-                        exit 1;
-                    }
-                "`;
-                
-                const result = await this.execCommand(psCommand);
-                console.log('   ✅ Print job submitted via PowerShell');
-                console.log('   • PowerShell output:', result);
-                return true;
-            } catch (psError) {
-                console.error('   ❌ PowerShell print method failed:', psError);
-            }
-            
-            // Method 3: Direct file copy (for network printers)
-            try {
-                console.log('   • Trying direct copy method...');
-                const directCopyCommand = `copy /B "${filePath}" "\\\\${printerName}"`;
-                console.log(`   • Command: ${directCopyCommand}`);
-                await this.execCommand(directCopyCommand);
-                console.log('   ✅ Print job sent via direct copy');
-                return true;
-            } catch (copyError) {
-                console.error('   ❌ Direct copy method failed:', copyError);
-            }
-            
-            console.error('❌ All print methods failed');
-            return false;
-            
-        } catch (error) {
-            console.error('❌ Error in printToPrinterDirect:', error);
-            return false;
-        } finally {
-            // Clean up the temporary file
-            if (fs.existsSync(filePath)) {
-                try {
-                    console.log(`   • Cleaning up temporary file: ${filePath}`);
-                    fs.unlinkSync(filePath);
-                } catch (cleanupError) {
-                    console.error('   • Error cleaning up temporary file:', cleanupError);
-                }
-            }
-        }
+  constructor() {
+    this.apiKey = process.env.PRINTNODE_API_KEY || '';
+    if (!this.apiKey) {
+      console.warn('PRINTNODE_API_KEY is not set. Printing will be disabled.');
     }
-    
-    /**
-     * List all available printers
-     */
-    public static async listPrinters(): Promise<string[]> {
-        try {
-            console.log('🔍 Detecting available printers...');
-            
-            // Try the simpler Get-Printer command first (more reliable on newer Windows versions)
-            try {
-                console.log('ℹ️ Using Get-Printer command...');
-                const command = 'powershell -Command "Get-Printer | Select-Object Name, Type, PrinterStatus, PortName | ConvertTo-Json -Compress"';
-                const result = await this.execCommand(command);
-                
-                if (!result) {
-                    throw new Error('No output from Get-Printer command');
-                }
-                
-                let printers;
-                try {
-                    printers = JSON.parse(result);
-                    if (!Array.isArray(printers)) {
-                        printers = [printers];
-                    }
-                } catch (e) {
-                    console.error('Error parsing printer list:', e);
-                    throw new Error('Failed to parse printer list');
-                }
-                
-                // Log printer details for debugging
-                console.log('📋 Available printers:');
-                printers.forEach((printer: any) => {
-                    console.log(`   • ${printer.Name} (Type: ${printer.Type}, Status: ${printer.PrinterStatus}, Port: ${printer.PortName})`);
-                });
-                
-                // Common receipt printer name patterns to prioritize (case insensitive)
-                const receiptPrinterPatterns = [
-                    'receipt', 'pos', 'thermal', 'ticket', 'impact',
-                    'epson', 'star', 'bixolon', 'zebra', 'citizen',
-                    'boca', 'epos', 'tm-', 'tm ', 't88v', 't20', 't70',
-                    '58mm', '80mm', 'usb', 'com', 'lpt', 'ethernet', 'network'
-                ];
-                
-                // First, filter out any unwanted printers (like Fax)
-                const filteredPrinters = printers.filter((p: any) => {
-                    const name = (p.Name || '').toLowerCase();
-                    return !name.includes('fax') && !name.includes('pdf') && !name.includes('xps');
-                });
-                
-                if (filteredPrinters.length === 0) {
-                    console.warn('⚠️ No suitable printers found after filtering. Will use all available printers.');
-                    filteredPrinters.push(...printers);
-                }
-                
-                // Sort printers - prioritize receipt printers, then by status, then by name
-                const sortedPrinters = [...filteredPrinters].sort((a: any, b: any) => {
-                    const aName = (a.Name || '').toLowerCase();
-                    const bName = (b.Name || '').toLowerCase();
-                    
-                    // Check if either printer matches receipt printer patterns
-                    const aIsReceiptPrinter = receiptPrinterPatterns.some(pattern => 
-                        aName.includes(pattern)
-                    );
-                    const bIsReceiptPrinter = receiptPrinterPatterns.some(pattern => 
-                        bName.includes(pattern)
-                    );
-                    
-                    // Put receipt printers first
-                    if (aIsReceiptPrinter && !bIsReceiptPrinter) return -1;
-                    if (!aIsReceiptPrinter && bIsReceiptPrinter) return 1;
-                    
-                    // Then prioritize printers that are online/ready
-                    const aStatus = (a.PrinterStatus || '').toString().toLowerCase();
-                    const bStatus = (b.PrinterStatus || '').toString().toLowerCase();
-                    
-                    const aIsReady = aStatus.includes('ready') || aStatus.includes('online') || aStatus === 'normal';
-                    const bIsReady = bStatus.includes('ready') || bStatus.includes('online') || bStatus === 'normal';
-                    
-                    if (aIsReady && !bIsReady) return -1;
-                    if (!aIsReady && bIsReady) return 1;
-                    
-                    // Finally sort by name
-                    return aName.localeCompare(bName);
-                });
-                
-                // Extract just the names
-                const printerNames = sortedPrinters.map((p: any) => p.Name);
-                
-                console.log(`✅ Found ${printerNames.length} printer(s)`);
-                if (printerNames.length > 0) {
-                    console.log(`   • Recommended printer (first in list): ${printerNames[0]}`);
-                }
-                return printerNames;
-                
-            } catch (e) {
-                console.error('Error getting printers with Get-Printer, falling back to WMI:', e);
-                
-                // Fall back to WMI if the above fails
-                console.log('ℹ️ Falling back to WMI query...');
-                const wmiCommand = 'powershell -Command "Get-WmiObject -Query \"SELECT * FROM Win32_Printer\" | Select-Object Name, PrinterStatus, PortName | ConvertTo-Json -Compress"';
-                const result = await this.execCommand(wmiCommand).catch(() => '');
-                
-                if (!result) {
-                    console.error('❌ Failed to detect any printers');
-                    return [];
-                }
-                
-                try {
-                    const printers = JSON.parse(result);
-                    const printerList = Array.isArray(printers) ? printers : [printers];
-                    
-                    // Sort printers - HP LaserJet first, then by name
-                    const sortedPrinters = [...printerList].sort((a: any, b: any) => {
-                        const aName = a.Name || '';
-                        const bName = b.Name || '';
-                        
-                        if (aName.includes('HP LaserJet')) return -1;
-                        if (bName.includes('HP LaserJet')) return 1;
-                        
-                        return aName.localeCompare(bName);
-                    });
-                    
-                    const printerNames = sortedPrinters.map((p: any) => p.Name);
-                    console.log(`✅ Found ${printerNames.length} printer(s) via WMI`);
-                    return printerNames;
-                    
-                } catch (e) {
-                    console.error('Error parsing WMI printer list:', e);
-                    return [];
-                }
-            }
-            
-        } catch (error) {
-            console.error('❌ Error listing printers:', error);
-            return [];
-        }
+  }
+
+  private async makeRequest(endpoint: string, method: string = 'GET', body?: any) {
+    if (!this.apiKey) {
+      console.warn('PrintNode API key not configured');
+      return null;
     }
 
-    /**
-     * Execute a shell command
-     */
-    private static execCommand(command: string): Promise<string> {
-        return new Promise((resolve, reject) => {
-            exec(command, { windowsHide: true }, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Command failed: ${command}`, error);
-                    return reject(new Error(stderr || 'Command failed'));
-                }
-                resolve(stdout.trim());
-            });
-        });
+    try {
+      const url = `${this.baseUrl}${endpoint}`;
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Basic ${Buffer.from(this.apiKey + ':').toString('base64')}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json; charset=utf-8',
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`PrintNode API error: ${error}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('PrintNode API request failed:', error);
+      return null;
     }
-    /**
-     * Clean up temporary file
-     */
-    private static cleanupFile(filePath: string): void {
-        if (fs.existsSync(filePath)) {
-            try {
-                fs.unlinkSync(filePath);
-            } catch (e) {
-                console.error('Failed to clean up temporary file:', e);
-            }
-        }
+  }
+
+  private async getPrinters() {
+    try {
+      const response = await this.makeRequest('/printers');
+      if (!response || !Array.isArray(response)) {
+        console.error('Invalid printers response:', response);
+        return [];
+      }
+
+      console.log('Available printers:');
+      response.forEach((printer: any) => {
+        console.log(`- ${printer.name} (${printer.id})`);
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error fetching printers:', error);
+      return [];
     }
+  }
+
+  private isVirtualPrinter(printerName: string): boolean {
+    const virtualPrinters = [
+      'microsoft xps',
+      'microsoft print to pdf',
+      'fax',
+      'onenote',
+      'adobe pdf',
+      'foxit reader pdf printer',
+      'send to onenote',
+      'pdf',
+      'xps',
+      'document writer'
+    ];
+
+    return virtualPrinters.some(vp =>
+      printerName.toLowerCase().includes(vp)
+    );
+  }
+
+  // private isThermalPrinter(printer: { name: string; type?: string }): boolean {
+  //   const thermalKeywords = ['epson', 'thermal', 'pos', 'receipt', 'star'];
+  //   return thermalKeywords.some(keyword => printer.name.toLowerCase().includes(keyword));
+  // }
+
+ async printOrderReceipt(order: OrderWithItems, printerName?: string) {
+  if (!this.apiKey) {
+    const errorMsg = 'PrintNode not configured, skipping receipt printing';
+    console.warn(errorMsg);
+    this.notifyPrintStatus(order, 'error', errorMsg);
+    return null;
+  }
+
+  try {
+    // Get available printers
+    const printers = await this.getPrinters();
+    if (!printers?.length) {
+      const errorMsg = 'No printers available';
+      this.notifyPrintStatus(order, 'error', errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Find the target printer
+    let printer = this.findPrinter(printers, printerName);
+    if (!printer) {
+      const errorMsg = 'No suitable printer found';
+      this.notifyPrintStatus(order, 'error', errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    console.log(`Selected printer: ${printer.name} (${printer.id})`);
+
+    // Determine printer type and format receipt accordingly
+    const isThermal = this.isThermalPrinter(printer);
+    const printJob = isThermal
+      ? await this.createThermalPrintJob(printer, order)
+      : await this.createPdfPrintJob(printer, order);
+
+    // Send print job
+    console.log(`Sending ${isThermal ? 'thermal' : 'PDF'} print job to: ${printer.name}`);
+    this.notifyPrintStatus(order, 'sending', 'Sending to printer...');
+
+    const result = await this.makeRequest('/printjobs', 'POST', printJob);
+    this.notifyPrintStatus(order, 'success', 'Receipt sent to printer');
+    return result;
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Failed to print receipt';
+    console.error('Print error:', errorMsg);
+    this.notifyPrintStatus(order, 'error', errorMsg);
+    throw error;
+  }
 }
 
-export default PrintService;
+private findPrinter(printers: any[], printerName?: string) {
+  // If printer name is specified, try to find it
+  if (printerName) {
+    const found = printers.find(p => 
+      p.name.toLowerCase().includes(printerName.toLowerCase())
+    );
+    if (found) return found;
+    console.warn(`Printer '${printerName}' not found, falling back to default`);
+  }
+
+  // Otherwise, find first non-virtual printer
+  const nonVirtual = printers.filter(p => !this.isVirtualPrinter(p.name));
+  if (nonVirtual.length > 0) {
+    return nonVirtual[0]; // Return first non-virtual printer
+  }
+
+  // If no non-virtual printers, return first available
+  return printers.length > 0 ? printers[0] : null;
+}
+
+private async createThermalPrintJob(printer: any, order: OrderWithItems) {
+  const receipt = this.formatReceiptThermal(order);
+  return {
+    printerId: printer.id,
+    title: `Order #${order.orderNumber}`,
+    contentType: 'raw_base64',
+    content: Buffer.from(receipt).toString('base64'),
+    source: 'POS System',
+    options: {
+      media: 'A4',
+      nopdf: true
+    }
+  };
+}
+
+private async createPdfPrintJob(printer: any, order: OrderWithItems) {
+  const pdfContent = await this.generatePdfReceipt(order);
+  return {
+    printerId: printer.id,
+    title: `Order #${order.orderNumber}`,
+    contentType: 'pdf_base64',
+    content: pdfContent.toString('base64'),
+    source: 'POS System',
+    options: {
+      copies: 1
+    }
+  };
+}
+
+private isThermalPrinter(printer: { name: string; type?: string }): boolean {
+  // Check for common thermal printer indicators in the name
+  const thermalKeywords = [
+    'thermal', 'pos', 'receipt', 'ticket', 'tm-', 'sp-', 
+    'epson', 'star', 'bixolon', 'zebra', 'zpl', 'epson'
+  ];
+  
+  const name = printer.name.toLowerCase();
+  return thermalKeywords.some(keyword => name.includes(keyword));
+}
+
+ private async generatePdfReceipt(order: OrderWithItems & { subtotal?: number; tax?: number; total?: number }): Promise<Buffer> {
+  // You'll need to implement PDF generation here
+  // Example using pdfkit (install with: npm install pdfkit)
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  
+  // Collect data into a buffer
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  
+  // Generate PDF content
+  doc.fontSize(20).text('YOUR RESTAURANT NAME', { align: 'center' });
+  doc.moveDown();
+  doc.fontSize(12).text('123 Restaurant St.', { align: 'center' });
+  doc.text('City, Country', { align: 'center' });
+  doc.moveDown();
+  doc.fontSize(16).text('RECEIPT', { align: 'center' });
+  doc.moveDown();
+  
+  // Add order details
+  doc.fontSize(12);
+  doc.text(`Order #: ${order.orderNumber}`);
+  doc.text(`Date: ${new Date().toLocaleString()}`);
+  doc.text(`Order Type: ${order.orderType || 'Dine-in'}`);
+  doc.moveDown();
+  
+  // Add items table
+  doc.font('Helvetica-Bold').text('ITEM', 50, doc.y);
+  doc.text('QTY', 250, doc.y);
+  doc.text('PRICE', 300, doc.y);
+  doc.text('TOTAL', 350, doc.y);
+  doc.moveTo(50, doc.y + 5).lineTo(400, doc.y + 5).stroke();
+  doc.moveDown(5);
+  
+  // Add items
+  doc.font('Helvetica');
+  order.items.forEach((item: any) => {
+    const itemTotal = (item.quantity * item.price).toFixed(2);
+    doc.text(item.name.substring(0, 30), 50, doc.y);
+    doc.text(item.quantity.toString(), 250, doc.y);
+    doc.text(item.price.toFixed(2), 300, doc.y);
+    doc.text(itemTotal, 350, doc.y);
+    doc.moveDown(1);
+    
+    if (item.modifiers && item.modifiers.length > 0) {
+      doc.font('Helvetica-Oblique').fontSize(10);
+      item.modifiers.forEach((modifier: any) => {
+        doc.text(`  - ${modifier.name}`, 70, doc.y);
+        doc.text(modifier.price.toFixed(2), 350, doc.y);
+        doc.moveDown(0.5);
+      });
+      doc.font('Helvetica').fontSize(12);
+    }
+    doc.moveDown(0.5);
+  });
+  
+  // Add totals
+  doc.moveTo(50, doc.y).lineTo(400, doc.y).stroke();
+  doc.moveDown(1);
+  doc.text(`Subtotal:`, 300, doc.y);
+  doc.text((order.subtotal || 0).toFixed(2), 350, doc.y);
+  doc.moveDown(1);
+  doc.text(`Tax:`, 300, doc.y);
+  doc.text((order.tax || 0).toFixed(2), 350, doc.y);
+  doc.moveTo(300, doc.y + 5).lineTo(400, doc.y + 5).stroke();
+  doc.moveDown(1);
+  doc.font('Helvetica-Bold').text(`TOTAL:`, 300, doc.y);
+  doc.text((order.total || 0).toFixed(2), 350, doc.y);
+  doc.moveDown(2);
+  
+  // Add footer
+  doc.font('Helvetica').fontSize(10).text('Thank you for dining with us!', { align: 'center' });
+  doc.text('Please come again!', { align: 'center' });
+  
+  // Finalize PDF
+  doc.end();
+  
+  // Wait for PDF generation to complete
+  return new Promise((resolve, reject) => {
+    doc.on('end', () => {
+      const pdfBuffer = Buffer.concat(chunks);
+      resolve(pdfBuffer);
+    });
+    doc.on('error', reject);
+  });
+}
+
+  private formatReceiptThermal(order: OrderWithItems & { subtotal?: number; tax?: number; total?: number }): string {
+    // Thermal printer ESC/POS commands
+    const newLine = '\n';
+    let receipt = '\x1B@'; // Initialize printer
+
+    const centerText = (text: string, width = 32) => {
+      if (text.length >= width) return text;
+      const padding = Math.floor((width - text.length) / 2);
+      return ' '.repeat(padding) + text;
+    };
+
+    const line = '-'.repeat(32);
+
+    receipt += newLine.repeat(2);
+    receipt += centerText('YOUR RESTAURANT NAME') + newLine;
+    receipt += centerText('123 Restaurant St.') + newLine;
+    receipt += centerText('City, Country') + newLine.repeat(1);
+    receipt += centerText('RECEIPT') + newLine;
+    receipt += line + newLine;
+
+    receipt += `Order #: ${order.orderNumber}${newLine}`;
+    receipt += `Date: ${new Date().toLocaleString()}${newLine}`;
+    receipt += `Order Type: ${order.orderType || 'Dine-in'}${newLine}`;
+    receipt += line + newLine;
+
+    receipt += 'ITEM'.padEnd(20) + 'QTY  PRICE   TOTAL' + newLine;
+    receipt += line + newLine;
+
+    order.items.forEach((item: any) => {
+      const itemTotal = (item.quantity * item.price).toFixed(2);
+      receipt += `${item.name.substring(0, 18).padEnd(20)}${item.quantity.toString().padEnd(5)}${item.price.toFixed(2).padStart(6)}${itemTotal.padStart(8)}${newLine}`;
+
+      if (item.modifiers && Array.isArray(item.modifiers)) {
+        item.modifiers.forEach((modifier: any) => {
+          receipt += `  - ${modifier.name}`.padEnd(21) + modifier.price.toFixed(2).padStart(14) + newLine;
+        });
+      }
+    });
+
+    receipt += line + newLine;
+    receipt += `Subtotal:`.padEnd(15) + (order.subtotal || 0).toFixed(2).padStart(17) + newLine;
+    receipt += `Tax:`.padEnd(15) + (order.tax || 0).toFixed(2).padStart(17) + newLine;
+    receipt += line + newLine;
+    receipt += `TOTAL:`.padEnd(15) + (order.total || 0).toFixed(2).padStart(17) + newLine;
+    receipt += line + newLine.repeat(2);
+
+    receipt += centerText('Thank you for dining with us!') + newLine;
+    receipt += centerText('Please come again!') + newLine.repeat(2);
+
+    receipt += '\x1DVA0'; // Cut paper
+
+    return receipt;
+  }
+
+  private async notifyPrintStatus(order: OrderWithItems, status: 'sending' | 'success' | 'error', message: string) {
+    try {
+      const socketService = getSocketService();
+      const { io } = socketService;
+
+      if (order.branchName) {
+        io.to(`branch-${order.branchName}`).emit('print-status', {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status,
+          message,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      io.emit('print-notification', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status,
+        message,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to send print status notification:', error);
+    }
+  }
+}
+
+export const printService = new PrintService();

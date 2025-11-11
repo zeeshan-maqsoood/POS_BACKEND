@@ -4,9 +4,11 @@ import { PrismaClient, UserRole, Permission } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { Server } from "http";
 import { initializeSocket } from "./src/services/socket.service";
+import { setupSocket } from "./src/config/socket";
 const prisma = new PrismaClient();
 const port = config.port;
-let server:Server;
+let server: Server;
+let io: any; // We'll store the socket.io instance here
 
 async function ensureAdminUser() {
   try {
@@ -61,11 +63,15 @@ async function startServer() {
     await ensureAdminUser();
     
     // Start the server
-   server= app.listen(port, () => {
+    server = app.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port}`);
     });
-   const io=initializeSocket(server as any);
-   return io;
+    
+    // Initialize and set up socket.io with the HTTP server
+    const socketService = setupSocket(server as any);
+    
+    // Store the io instance for cleanup
+    io = socketService.io;
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
