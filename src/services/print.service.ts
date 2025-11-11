@@ -483,79 +483,245 @@ private isThermalPrinter(printer: { name: string; type?: string }): boolean {
   return thermalKeywords.some(keyword => name.includes(keyword));
 }
 
- private async generatePdfReceipt(order: OrderWithItems & { subtotal?: number; tax?: number; total?: number }): Promise<Buffer> {
-  // You'll need to implement PDF generation here
-  // Example using pdfkit (install with: npm install pdfkit)
+ 
+
+private async generatePdfReceipt(order: OrderWithItems & { 
+  subtotal?: number; 
+  tax?: number; 
+  total?: number;
+  branch?: {
+    name: string;
+    address?: string;
+    phone?: string;
+  };
+}): Promise<Buffer> {
   const PDFDocument = require('pdfkit');
-  const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  const doc = new PDFDocument({ 
+    size: [80 * 2.83465, 297], // 80mm width (common receipt width) in points
+    margin: 10,
+    bufferPages: true
+  });
   
   // Collect data into a buffer
   const chunks: Buffer[] = [];
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
   
-  // Generate PDF content
-  doc.fontSize(20).text('YOUR RESTAURANT NAME', { align: 'center' });
-  doc.moveDown();
-  doc.fontSize(12).text('123 Restaurant St.', { align: 'center' });
-  doc.text('City, Country', { align: 'center' });
-  doc.moveDown();
-  doc.fontSize(16).text('RECEIPT', { align: 'center' });
-  doc.moveDown();
+  // Set up fonts (using standard fonts that work in PDFKit)
+  const titleFont = 'Helvetica-Bold';
+  const headerFont = 'Helvetica-Bold';
+  const bodyFont = 'Helvetica';
+  const smallFont = 'Helvetica-Oblique';
   
-  // Add order details
-  doc.fontSize(12);
-  doc.text(`Order #: ${order.orderNumber}`);
-  doc.text(`Date: ${new Date().toLocaleString()}`);
-  doc.text(`Order Type: ${order.orderType || 'Dine-in'}`);
-  doc.moveDown();
+  // Colors
+  const primaryColor = '#000000'; // Darker for better thermal printing
+  const secondaryColor = '#333333';
+  const accentColor = '#000000';
   
-  // Add items table
-  doc.font('Helvetica-Bold').text('ITEM', 50, doc.y);
-  doc.text('QTY', 250, doc.y);
-  doc.text('PRICE', 300, doc.y);
-  doc.text('TOTAL', 350, doc.y);
-  doc.moveTo(50, doc.y + 5).lineTo(400, doc.y + 5).stroke();
-  doc.moveDown(5);
+  // Layout constants
+  const leftMargin = 5;
+  const rightMargin = 5;
+  const contentWidth = 80 * 2.83465 - leftMargin - rightMargin; // 80mm in points
   
-  // Add items
-  doc.font('Helvetica');
+  // Helper function to add line break
+  const br = (height = 10) => doc.moveDown(height / 10);
+  
+  // Set document info
+  doc.info.Title = `Receipt #${order.orderNumber}`;
+  
+  // Header
+  doc
+    .font(headerFont)
+    .fontSize(14)
+    .fillColor(accentColor)
+    .text((order.branch?.name || 'YOUR RESTAURANT').toUpperCase(), { 
+      align: 'center',
+      underline: true
+    });
+  
+  br(5);
+  
+  // Restaurant info
+  doc
+    .font(bodyFont)
+    .fontSize(8)
+    .fillColor(secondaryColor)
+    .text(order.branch?.address || '123 Restaurant St.', { align: 'center' })
+    .text(`Tel: ${order.branch?.phone || '(123) 456-7890'}`, { align: 'center' });
+  
+  br(10);
+  
+  // Order info
+  doc
+    .font(headerFont)
+    .fontSize(10)
+    .fillColor(primaryColor)
+    .text('RECEIPT', { align: 'center', underline: true });
+  
+  br(5);
+  
+  // Order details
+  doc
+    .font(bodyFont)
+    .fontSize(8)
+    .fillColor(primaryColor)
+    .text(`Order #: ${order.orderNumber}`, { align: 'left' })
+    .text(`Date: ${new Date().toLocaleString()}`, { align: 'left' })
+    .text(`Type: ${order.orderType || 'Dine-in'}`, { align: 'left' });
+  
+  br(10);
+  
+  // Items table header
+  const startY = doc.y;
+  const col1 = leftMargin + 5;  // Item name
+  const col2 = contentWidth * 0.6;  // QTY
+  const col3 = contentWidth * 0.8;  // Price
+  const col4 = contentWidth - rightMargin;  // Total (right-aligned)
+  
+  // Draw header line
+  doc
+    .moveTo(leftMargin, startY + 8)
+    .lineTo(contentWidth + leftMargin, startY + 8)
+    .lineWidth(0.5)
+    .stroke(primaryColor);
+    
+  // Header text
+  doc
+    .font(headerFont)
+    .fontSize(7)
+    .fillColor(primaryColor)
+    .text('ITEM', col1, startY + 2)
+    .text('QTY', col2, startY + 2)
+    .text('PRICE', col3, startY + 2, { width: col4 - col3 - 5, align: 'right' })
+    .text('TOTAL', col4, startY + 2, { align: 'right' });
+  
+  // Items
+  let currentY = startY + 15;
   order.items.forEach((item: any) => {
     const itemTotal = (item.quantity * item.price).toFixed(2);
-    doc.text(item.name.substring(0, 30), 50, doc.y);
-    doc.text(item.quantity.toString(), 250, doc.y);
-    doc.text(item.price.toFixed(2), 300, doc.y);
-    doc.text(itemTotal, 350, doc.y);
-    doc.moveDown(1);
+    const itemName = item.name || 'Unnamed Item';
     
-    if (item.modifiers && item.modifiers.length > 0) {
-      doc.font('Helvetica-Oblique').fontSize(10);
-      item.modifiers.forEach((modifier: any) => {
-        doc.text(`  - ${modifier.name}`, 70, doc.y);
-        doc.text(modifier.price.toFixed(2), 350, doc.y);
-        doc.moveDown(0.5);
+    // Calculate item name height with word wrap
+    const itemNameOptions = {
+      width: col2 - col1 - 5,
+      align: 'left' as const
+    };
+    
+    // Get height of the item name with wrapping
+    const itemHeight = Math.max(
+      doc.font(bodyFont).fontSize(8).heightOfString(itemName, itemNameOptions),
+      10  // Minimum height
+    );
+    
+    // Draw item name with word wrap
+    doc
+      .font(bodyFont)
+      .fontSize(8)
+      .fillColor(primaryColor)
+      .text(itemName, col1, currentY, itemNameOptions);
+      
+    // Draw quantity, price, and total in a single line
+    doc
+      .text(item.quantity.toString(), col2, currentY)
+      .text(parseFloat(item.price).toFixed(2), col3, currentY, { 
+        width: col4 - col3 - 5, 
+        align: 'right' 
+      })
+      .text(itemTotal, col4, currentY, { 
+        align: 'right' 
       });
-      doc.font('Helvetica').fontSize(12);
+    
+    currentY += itemHeight + 2;
+    
+    // Modifiers
+    if (item.modifiers?.length) {
+      doc.font(smallFont).fontSize(7).fillColor(secondaryColor);
+      
+      item.modifiers.forEach((mod: any) => {
+        currentY += 3;  // Small space before modifier
+        doc
+          .text(`  - ${mod.name}`, col1 + 5, currentY)
+          .text(`+${parseFloat(mod.price).toFixed(2)}`, col4, currentY, {
+            align: 'right'
+          });
+        currentY += 7;  // Line height for modifier
+      });
+      
+      doc.font(bodyFont).fontSize(8).fillColor(primaryColor);
     }
-    doc.moveDown(0.5);
+    
+    currentY += 5;  // Space after item
   });
   
-  // Add totals
-  doc.moveTo(50, doc.y).lineTo(400, doc.y).stroke();
-  doc.moveDown(1);
-  doc.text(`Subtotal:`, 300, doc.y);
-  doc.text((order.subtotal || 0).toFixed(2), 350, doc.y);
-  doc.moveDown(1);
-  doc.text(`Tax:`, 300, doc.y);
-  doc.text((order.tax || 0).toFixed(2), 350, doc.y);
-  doc.moveTo(300, doc.y + 5).lineTo(400, doc.y + 5).stroke();
-  doc.moveDown(1);
-  doc.font('Helvetica-Bold').text(`TOTAL:`, 300, doc.y);
-  doc.text((order.total || 0).toFixed(2), 350, doc.y);
-  doc.moveDown(2);
+  // Draw line before totals
+  doc
+    .moveTo(leftMargin, currentY)
+    .lineTo(contentWidth + leftMargin, currentY)
+    .lineWidth(0.5)
+    .stroke(secondaryColor);
   
-  // Add footer
-  doc.font('Helvetica').fontSize(10).text('Thank you for dining with us!', { align: 'center' });
-  doc.text('Please come again!', { align: 'center' });
+  currentY += 8;
+  
+  // Calculate column positions for totals (right-aligned)
+  const totalLabelWidth = 50;  // Width for labels like 'Subtotal:', 'Tax:'
+  const totalValueWidth = 50;  // Width for the values
+  
+  // Helper function to add a total line
+  const addTotalLine = (label: string, value: number, isBold = false) => {
+    doc
+      .font(isBold ? headerFont : bodyFont)
+      .fontSize(isBold ? 9 : 8)
+      .fillColor(isBold ? accentColor : primaryColor)
+      .text(label, col4 - totalLabelWidth - totalValueWidth, currentY, {
+        width: totalLabelWidth,
+        align: 'right'
+      })
+      .text(value.toFixed(2), col4, currentY, {
+        align: 'right'
+      });
+    currentY += isBold ? 12 : 9;
+  };
+  
+  // Add subtotal and tax
+  if (order.subtotal !== undefined) {
+    addTotalLine('Subtotal:', order.subtotal);
+  }
+  
+  if (order.tax !== undefined) {
+    addTotalLine('Tax:', order.tax);
+  }
+  
+  // Add a line above total
+  doc
+    .moveTo(col4 - totalLabelWidth - totalValueWidth, currentY - 3)
+    .lineTo(col4, currentY - 3)
+    .lineWidth(0.5)
+    .stroke(secondaryColor);
+  
+  // Add grand total
+  if (order.total !== undefined) {
+    addTotalLine('TOTAL:', order.total, true);
+  }
+  
+  currentY += 5;
+  
+  // Payment info
+  if (order.paymentStatus === 'PAID' && order.paymentMethod) {
+    doc
+      .font(bodyFont)
+      .fontSize(8)
+      .fillColor(secondaryColor)
+      .text(`Paid with: ${order.paymentMethod}`, { align: 'right' });
+    currentY += 10;
+  }
+  
+  // Footer
+  br(15);
+  doc
+    .font(bodyFont)
+    .fontSize(8)
+    .fillColor(secondaryColor)
+    .text('Thank you for dining with us!', { align: 'center' })
+    .text('Please come again!', { align: 'center' });
   
   // Finalize PDF
   doc.end();
@@ -569,60 +735,108 @@ private isThermalPrinter(printer: { name: string; type?: string }): boolean {
     doc.on('error', reject);
   });
 }
+ private formatReceiptThermal(order: OrderWithItems & { 
+  subtotal?: number; 
+  tax?: number; 
+  total?: number;
+  branch?: {
+    name: string;
+    address?: string;
+    phone?: string;
+  };
+}): string {
+  // Common ESC/POS commands
+  const ESC = '\x1B';
+  const INIT = `${ESC}@`; // Initialize printer
+  const ALIGN_CENTER = `${ESC}a1`; // Center alignment
+  const ALIGN_LEFT = `${ESC}a0`; // Left alignment
+  const BOLD_ON = `${ESC}E1`; // Bold on
+  const BOLD_OFF = `${ESC}E0`; // Bold off
+  const FONT_A = `${ESC}!0`; // Font A (small)
+  const FONT_B = `${ESC}!1`; // Font B (medium)
+  const CUT = `${ESC}d3`; // Cut paper (partial)
+  const LINE_FEED = '\n';
+  const PAPER_WIDTH = 32; // Characters per line (adjust based on your printer)
 
-  private formatReceiptThermal(order: OrderWithItems & { subtotal?: number; tax?: number; total?: number }): string {
-    // Thermal printer ESC/POS commands
-    const newLine = '\n';
-    let receipt = '\x1B@'; // Initialize printer
+  let receipt = INIT; // Initialize printer
+  
+  // Helper functions
+  const centerText = (text: string) => {
+    const padding = Math.max(0, Math.floor((PAPER_WIDTH - text.length) / 2));
+    return ' '.repeat(padding) + text;
+  };
 
-    const centerText = (text: string, width = 32) => {
-      if (text.length >= width) return text;
-      const padding = Math.floor((width - text.length) / 2);
-      return ' '.repeat(padding) + text;
-    };
-
-    const line = '-'.repeat(32);
-
-    receipt += newLine.repeat(2);
-    receipt += centerText('YOUR RESTAURANT NAME') + newLine;
-    receipt += centerText('123 Restaurant St.') + newLine;
-    receipt += centerText('City, Country') + newLine.repeat(1);
-    receipt += centerText('RECEIPT') + newLine;
-    receipt += line + newLine;
-
-    receipt += `Order #: ${order.orderNumber}${newLine}`;
-    receipt += `Date: ${new Date().toLocaleString()}${newLine}`;
-    receipt += `Order Type: ${order.orderType || 'Dine-in'}${newLine}`;
-    receipt += line + newLine;
-
-    receipt += 'ITEM'.padEnd(20) + 'QTY  PRICE   TOTAL' + newLine;
-    receipt += line + newLine;
-
-    order.items.forEach((item: any) => {
-      const itemTotal = (item.quantity * item.price).toFixed(2);
-      receipt += `${item.name.substring(0, 18).padEnd(20)}${item.quantity.toString().padEnd(5)}${item.price.toFixed(2).padStart(6)}${itemTotal.padStart(8)}${newLine}`;
-
-      if (item.modifiers && Array.isArray(item.modifiers)) {
-        item.modifiers.forEach((modifier: any) => {
-          receipt += `  - ${modifier.name}`.padEnd(21) + modifier.price.toFixed(2).padStart(14) + newLine;
-        });
-      }
-    });
-
-    receipt += line + newLine;
-    receipt += `Subtotal:`.padEnd(15) + (order.subtotal || 0).toFixed(2).padStart(17) + newLine;
-    receipt += `Tax:`.padEnd(15) + (order.tax || 0).toFixed(2).padStart(17) + newLine;
-    receipt += line + newLine;
-    receipt += `TOTAL:`.padEnd(15) + (order.total || 0).toFixed(2).padStart(17) + newLine;
-    receipt += line + newLine.repeat(2);
-
-    receipt += centerText('Thank you for dining with us!') + newLine;
-    receipt += centerText('Please come again!') + newLine.repeat(2);
-
-    receipt += '\x1DVA0'; // Cut paper
-
-    return receipt;
+  const line = '-'.repeat(PAPER_WIDTH);
+  
+  // Get restaurant info from order or use defaults
+  const restaurantName = order.branch?.name || 'YOUR RESTAURANT';
+  const address = order.branch?.address || '123 Restaurant St.';
+  const phone = order.branch?.phone || 'Phone: (123) 456-7890';
+  
+  // Header
+  receipt += `${ALIGN_CENTER}${BOLD_ON}${FONT_B}`;
+  receipt += `${centerText(restaurantName.toUpperCase())}${LINE_FEED}`;
+  receipt += `${FONT_A}${BOLD_OFF}`;
+  receipt += `${centerText(address)}${LINE_FEED}`;
+  if (phone) {
+    receipt += `${centerText(phone)}${LINE_FEED}`;
   }
+  receipt += `${LINE_FEED}`;
+  
+  // Order info
+  receipt += `${ALIGN_LEFT}`;
+  receipt += `Order #: ${order.orderNumber}${LINE_FEED}`;
+  receipt += `Date: ${new Date().toLocaleString()}${LINE_FEED}`;
+  receipt += `Type: ${order.orderType || 'Dine-in'}${LINE_FEED}`;
+  receipt += `${LINE_FEED}${line}${LINE_FEED}`;
+  
+  // Items header
+  receipt += `ITEM${' '.repeat(15)}QTY  PRICE  TOTAL${LINE_FEED}`;
+  receipt += `${line}${LINE_FEED}`;
+  
+  // Items
+  order.items.forEach((item: any) => {
+    const itemTotal = (item.quantity * item.price).toFixed(2);
+    const itemName = item.name.length > 15 ? `${item.name.substring(0, 12)}...` : item.name;
+    const qty = item.quantity.toString().padStart(2);
+    const price = parseFloat(item.price).toFixed(2).padStart(5);
+    const total = itemTotal.padStart(6);
+    
+    receipt += `${itemName}${' '.repeat(18 - itemName.length)}${qty}   ${price}  ${total}${LINE_FEED}`;
+    
+    // Modifiers
+    if (item.modifiers?.length) {
+      item.modifiers.forEach((mod: any) => {
+        const modName = `  - ${mod.name}`.substring(0, 15);
+        const modPrice = `+${parseFloat(mod.price).toFixed(2)}`.padStart(6);
+        receipt += `${modName}${' '.repeat(23 - modName.length)}${modPrice}${LINE_FEED}`;
+      });
+    }
+  });
+  
+  // Totals
+  receipt += `${line}${LINE_FEED}`;
+  receipt += `Subtotal:${' '.repeat(19)}${(order.subtotal || 0).toFixed(2).padStart(8)}${LINE_FEED}`;
+  receipt += `Tax:${' '.repeat(24)}${(order.tax || 0).toFixed(2).padStart(8)}${LINE_FEED}`;
+  receipt += `${line}${LINE_FEED}`;
+  receipt += `${BOLD_ON}TOTAL:${' '.repeat(19)}${(order.total || 0).toFixed(2).padStart(8)}${BOLD_OFF}${LINE_FEED}`;
+  receipt += `${LINE_FEED}${LINE_FEED}`;
+  
+  // Payment info if available
+  if (order.paymentStatus === 'PAID' && order.paymentMethod) {
+    receipt += `Paid with: ${order.paymentMethod}${LINE_FEED}`;
+  }
+  
+  // Footer
+  receipt += `${ALIGN_CENTER}${LINE_FEED}`;
+  receipt += `Thank you for dining with us!${LINE_FEED}`;
+  receipt += `Please come again!${LINE_FEED}${LINE_FEED}${LINE_FEED}`;
+  
+  // Cut paper and add some space
+  receipt += `${LINE_FEED}${LINE_FEED}${CUT}${LINE_FEED}`;
+  
+  return receipt;
+}
 
   private async notifyPrintStatus(order: OrderWithItems, status: 'sending' | 'success' | 'error', message: string) {
     try {
