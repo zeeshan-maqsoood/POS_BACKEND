@@ -268,24 +268,61 @@ export const orderService = {
 
     // Handle items update if provided
     if (data.items) {
+      // Get menu items for validation and pricing
+      const menuItemIds = data.items.map(item => item.menuItemId).filter(Boolean);
+      const menuItems = await prisma.menuItem.findMany({
+        where: { id: { in: menuItemIds } },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          taxRate: true,
+          taxExempt: true
+        }
+      });
+      
+      const menuItemMap = new Map(
+        menuItems.map(item => [item.id, item])
+      );
+      
       // Delete existing items and create new ones
       await prisma.orderItem.deleteMany({
         where: { orderId: id }
       });
 
       updateData.items = {
-        create: data.items.map(item => ({
-          menuItemId: item.menuItemId,
-          name: item.name || 'Unnamed Item',
-          quantity: item.quantity,
-          price: item.price,
-          taxRate: item.taxRate || 0,
-          tax: (item.price * (item.taxRate || 0) / 100) * item.quantity,
-          total: item.quantity * item.price,
-          notes: item.notes,
-          modifiers: item.modifiers || {}
-        }))
+        create: data.items.map(item => {
+          const menuItem = menuItemMap.get(item.menuItemId);
+          if (!menuItem) {
+            throw new Error(`Menu item with ID ${item.menuItemId} not found`);
+          }
+          
+          return {
+            menuItemId: item.menuItemId,
+            name: menuItem.name || 'Unnamed Item',
+            quantity: item.quantity,
+            price: menuItem.price || 0,
+            taxRate: menuItem.taxExempt ? 0 : (menuItem.taxRate || 0),
+            tax: ((menuItem.price || 0) * (menuItem.taxExempt ? 0 : (menuItem.taxRate || 0)) / 100) * item.quantity,
+            total: item.quantity * (menuItem.price || 0),
+            notes: item.notes,
+            modifiers: item.modifiers || {}
+          };
+        })
       };
+      
+      console.log(`🔍 [OrderService] Update - Menu items lookup:`, 
+        data.items.map(item => {
+          const menuItem = menuItemMap.get(item.menuItemId);
+          return {
+            menuItemId: item.menuItemId,
+            menuItemName: menuItem?.name,
+            menuItemPrice: menuItem?.price,
+            frontendName: item.name,
+            frontendPrice: item.price
+          };
+        })
+      );
     }
     console.log(updateData, "updateData")
 
@@ -415,33 +452,90 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
     // Create the order with items in a transaction
     const order = await prisma.$transaction(async (tx) => {
-      // Calculate item totals and taxes
+      // Get all menu items for validation and pricing
+      const menuItemIds = items.map(item => item.menuItemId).filter(Boolean);
+      const menuItems = await tx.menuItem.findMany({
+        where: { id: { in: menuItemIds } },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          taxRate: true,
+          taxExempt: true
+        }
+      });
+      
+      const menuItemMap = new Map(
+        menuItems.map(item => [item.id, item])
+      );
+      
+      // Process items and modifiers
       const itemsWithTotals = items.map(item => {
         const quantity = item.quantity || 1;
-        const price = parseFloat(item.price.toString()) || 0;
-        const taxRate = parseFloat((item.taxRate || 0).toString());
-        const subtotal = price * quantity;
-        const tax = subtotal * (taxRate / 100);
-        const total = subtotal + tax;
+        
+        // Get the actual menu item from database
+        const menuItem = menuItemMap.get(item.menuItemId);
+        if (!menuItem) {
+          throw new Error(`Menu item with ID ${item.menuItemId} not found`);
+        }
+        
+        console.log(`🔍 [OrderService] Menu item lookup:`, {
+          menuItemId: item.menuItemId,
+          menuItemName: menuItem.name,
+          menuItemPrice: menuItem.price,
+          menuItemTaxRate: menuItem.taxRate,
+          menuItemTaxExempt: menuItem.taxExempt,
+          frontendName: item.name,
+          frontendPrice: item.price
+        });
+        
+        const basePrice = parseFloat(menuItem.price.toString()) || 0;
+        // Use menu item's tax rate, unless item is tax exempt
+        const taxRate = menuItem.taxExempt ? 0 : (menuItem.taxRate || 0);
+        
+        // Process modifiers if any
+        let modifierTotal = 0;
+        const modifiers = item.modifiers?.map((mod: any) => ({
+          id: mod.id || `mod-${Math.random().toString(36).substr(2, 9)}`,
+          name: mod.name || 'Modifier',
+          price: Number(mod.price) || 0,
+          quantity: Number(mod.quantity) || 1,
+          total: (Number(mod.price) || 0) * (Number(mod.quantity) || 1) * quantity, // Multiply by item quantity
+          notes: mod.notes || undefined
+        })) || [];
+        
+        // Calculate modifier total (already multiplied by item quantity above)
+        modifierTotal = modifiers.reduce((sum: number, mod: any) => sum + (mod.total || 0), 0);
+        
+        // Calculate item subtotal (base price * quantity + modifiers)
+        const itemSubtotal = (basePrice * quantity) + modifierTotal;
+        const itemTax = itemSubtotal * (taxRate / 100);
+        const itemTotal = itemSubtotal + itemTax;
+        const baseItemTotal = basePrice * quantity; // Store base item total without modifiers and tax
 
         return {
           ...item,
           quantity,
-          price,
+          price: basePrice, // Keep original base price
           taxRate,
-          tax,
-          total,
+          tax: itemTax,
+          total: baseItemTotal, // Store base item total without modifiers and tax
           notes: item.notes || null,
+          _modifiers: modifiers, // Store modifiers for later use
+          _modifierTotal: modifierTotal // Store modifier total for calculation
         };
       });
 
-      // Calculate order totals
-      const subtotal = itemsWithTotals.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+      // Calculate order totals including modifiers
+      const itemSubtotal = itemsWithTotals.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+      const modifierSubtotal = itemsWithTotals.reduce((sum: number, item: any) => sum + (item._modifierTotal || 0) * item.quantity, 0);
+      const subtotal = itemSubtotal + modifierSubtotal;
+      
       const tax = itemsWithTotals.reduce((sum: number, item: any) => sum + (item.tax || 0), 0);
       const total = subtotal + tax;
 
       // Create the order with the specified status
-      const order = await tx.order.create({
+      const newOrder = await tx.order.create({
         data: {
           ...orderData,
           status, // Make sure status is included here
@@ -451,22 +545,16 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
           branchId,
           createdById: currentUser.userId,
           items: {
-            create: itemsWithTotals.map(item => ({
+            create: itemsWithTotals.map((item: any) => ({
               menuItemId: item.menuItemId,
-              name: item.name || 'Unnamed Item',
+              name: menuItemMap.get(item.menuItemId)?.name || 'Unnamed Item',
               quantity: item.quantity,
-              price: item.price,
+              price: item.price, // Base price from database
               taxRate: item.taxRate,
               tax: item.tax,
               total: item.total,
               notes: item.notes,
-              modifiers: item.modifiers ? {
-                create: item.modifiers.map(mod => ({
-                  name: mod.name,
-                  price: mod.price,
-                  menuModifierId: mod.id
-                }))
-              } : undefined
+              modifiers: item._modifiers ? item._modifiers as any : Prisma.JsonNull
             }))
           }
         },
@@ -484,28 +572,85 @@ export async function createOrder(data: CreateOrderInput, currentUser: JwtPayloa
 
       // Deduct inventory after successful order creation
       await inventoryService.deductInventoryForOrder({
-        ...order,
+        ...newOrder,
         items: itemsWithTotals
       });
 
-      return order;
+      return newOrder;
     });
 
     console.log('Order created successfully:', order);
     
-    // Print receipt in the background (don't await to avoid blocking the response)
-    console.log('[DEBUG] Sending order to print service...');
-    
-    // Prepare order data for printing
-    const receiptData = {
-      ...order,
-      items: order.items || []
-    };
-    
-    // Print the receipt in the background
-    printService.printOrderReceipt(receiptData as any)
-      .then(() => console.log('[DEBUG] Receipt sent to printer successfully'))
-      .catch(error => console.error('[ERROR] Failed to print receipt:', error));
+    // Print receipt in the background (don't wait for it to complete)
+    try {
+      // Get the order with items
+      const orderWithItems = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { 
+          items: true,  // Just get the items, we'll handle modifiers separately
+          branch: true
+        }
+      });
+      
+      if (orderWithItems) {
+        // Ensure we have the branch data
+        const branch = 'branch' in orderWithItems && orderWithItems.branch 
+          ? orderWithItems.branch 
+          : await prisma.branch.findUnique({
+              where: { id: order.branchId || '' }
+            });
+        
+        // Format the order data with modifiers from the JSON field
+        const orderWithBranch = {
+          ...orderWithItems,
+          branch,
+          items: await Promise.all(orderWithItems.items.map(async (item) => {
+            // Parse the modifiers JSON field if it exists
+            let modifiers = [];
+            if (item.modifiers) {
+              try {
+                // Handle both string and object formats
+                const modifiersData = typeof item.modifiers === 'string' 
+                  ? JSON.parse(item.modifiers)
+                  : item.modifiers;
+                
+                if (Array.isArray(modifiersData)) {
+                  modifiers = modifiersData.map(mod => ({
+                    id: mod.id || `mod-${Math.random().toString(36).substr(2, 9)}`,
+                    name: mod.name || 'Modifier',
+                    price: Number(mod.price) || 0,
+                    quantity: Number(mod.quantity) || 1,
+                    total: (Number(mod.price) || 0) * (Number(mod.quantity) || 1),
+                    notes: mod.notes || undefined
+                  }));
+                }
+              } catch (error) {
+                console.error('Error parsing modifiers:', error);
+              }
+            }
+            
+            return {
+              ...item,
+              modifiers
+            };
+          }))
+        };
+        
+        console.log('📄 Sending order to print service with modifiers:', 
+          JSON.stringify(orderWithBranch.items.map(i => ({
+            name: i.name,
+            modifiers: i.modifiers
+          })), null, 2)
+        );
+        
+        printService.printReceipt(orderWithBranch).catch(error => {
+          console.error('Error printing receipt:', error);
+        });
+      }
+    } catch (printError) {
+      console.error('Failed to print receipt:', printError);
+      // Don't fail the order creation if printing fails
+    }
     
     return order;
   } catch (error) {
@@ -681,6 +826,7 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
         },
         include: {
           items: true,
+          branch: true,
           createdBy: {
             select: {
               id: true,
@@ -703,6 +849,16 @@ export async function updatePaymentStatusService(id: string, paymentStatus: Paym
         })
       ] : [])
     ]);
+
+    // If payment is marked as PAID, print a receipt
+    if (paymentStatus === 'PAID') {
+      try {
+        await printService.printReceipt(updatedOrder);
+      } catch (printError) {
+        console.error('Error printing receipt after payment:', printError);
+        // Don't fail the payment update if printing fails
+      }
+    }
 
     return updatedOrder;
   } catch (error) {
@@ -1208,22 +1364,19 @@ export async function updateOrder(
         };
 
         // Print in the background
-        printService.printOrderReceipt(orderWithNewItems as any)
+        printService.printReceipt(orderWithNewItems as any)
           .then(result => {
-            console.log('PrintService result for update:', result); // Debug: Log the full result
-            const { manager, kitchen } = result;
-
-            // Log full receipt to console if printing succeeds
-            if (manager || kitchen) {
-              console.log('\n========== PHYSICAL RECEIPT CONTENT (NEW ITEMS) =========='); // Indicate it's for new items
-              logReceiptToConsole(orderWithNewItems); // Log the receipt details for new items
-              console.log('=====================================================\n');
+            console.log('PrintService result for update:', result);
+            const { success, error } = result;
+            
+            if (success) {
+              console.log('\n========== RECEIPT PRINTED (NEW ITEMS) ==========');
+              console.log('Order:', orderWithNewItems.orderNumber);
+              console.log('Items:', orderWithNewItems.items.length);
+              console.log('==========================================\n');
+            } else {
+              console.error('Failed to print receipt for new items:', error);
             }
-
-            if (manager && completeOrder) console.log('Manager receipt printed successfully for order:', completeOrder.orderNumber);
-            if (kitchen && completeOrder) console.log('Kitchen receipt printed successfully for order:', completeOrder.orderNumber);
-            if (!manager) console.warn('Failed to print manager receipt for updated order');
-            if (!kitchen) console.warn('Failed to print kitchen receipt for updated order');
           })
           .catch(error => {
             console.error('Error printing receipt for updated order:', error);
@@ -1232,24 +1385,21 @@ export async function updateOrder(
 
       // Log receipt to console after order update
       if (completeOrder) {
-        // Note: Full receipt logging is now handled in the print success callback above
         // Print receipt for the updated order
-        printService.printOrderReceipt(completeOrder as any)
+        printService.printReceipt(completeOrder as any)
           .then(result => {
-            console.log('PrintService result for full update:', result); // Debug: Log the full result
-            const { manager, kitchen } = result;
-
-            // Log full receipt to console if printing succeeds
-            if (manager || kitchen) {
-              console.log('\n========== PHYSICAL RECEIPT CONTENT (FULL ORDER) =========='); // Indicate it's for the full order
-              logReceiptToConsole(completeOrder); // Log the receipt details for the full order
-              console.log('=======================================================\n');
+            console.log('PrintService result for full update:', result);
+            const { success, error } = result;
+            
+            if (success) {
+              console.log('\n========== RECEIPT PRINTED (FULL ORDER) ==========');
+              console.log('Order:', completeOrder.orderNumber);
+              console.log('Items:', completeOrder.items.length);
+              console.log('Total: $' + (completeOrder.total || 0).toFixed(2));
+              console.log('=========================================\n');
+            } else {
+              console.error('Failed to print receipt for full order:', error);
             }
-
-            if (manager) console.log('Manager receipt printed successfully for order:', completeOrder.orderNumber);
-            if (kitchen) console.log('Kitchen receipt printed successfully for order:', completeOrder.orderNumber);
-            if (!manager) console.warn('Failed to print manager receipt for updated order');
-            if (!kitchen) console.warn('Failed to print kitchen receipt for updated order');
           })
           .catch(error => {
             console.error('Error printing receipt for updated order:', error);

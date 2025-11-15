@@ -3,6 +3,7 @@ import * as orderService from "./order.service";
 import { ApiResponse } from "../../utils/apiResponse";
 import { Order, OrderStatus, PaymentStatus, OrderType, PaymentMethod } from '@prisma/client';
 import { JwtPayload } from "../../types/auth.types";
+import { printService } from "../../services/print.service";
 import { parseISO, isDate } from 'date-fns';
 import { getIo } from "../../../app";
 import { NotificationService } from "../../services/notification.service";
@@ -229,13 +230,19 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     // Print receipt if order is marked as COMPLETED
     if (status === 'COMPLETED' && currentOrder.status !== 'COMPLETED') {
       try {
-        await PrintService.printOrderReceipt({
+        // Create a new object with only the fields needed for printing
+        const printData = {
           ...updatedOrder,
-          isStatusReceipt: true,
-          previousStatus: currentOrder.status,
-          newStatus: status,
-          updatedBy: currentUser.userId || 'System'
-        });
+          // Add status update information as metadata
+          metadata: {
+            isStatusUpdate: true,
+            previousStatus: currentOrder.status,
+            newStatus: status,
+            updatedBy: currentUser.userId || 'System',
+            updatedAt: new Date().toISOString()
+          }
+        };
+        await printService.printReceipt(printData);
         console.log('Order completion receipt printed successfully');
       } catch (printError) {
         console.error('Error printing order completion receipt:', printError);

@@ -14,48 +14,22 @@ export class NotificationService {
       const socketService = getSocketService();
       const { io } = socketService;
       
-      // Find all managers and kitchen staff in the same branch
-      const users = await prisma.user.findMany({
-        where: {
-          branch: order.branchName,
-          role: {
-            in: ['MANAGER', 'KITCHEN_STAFF'] // Only notify these roles
-          }
-        },
-        select: {
-          id: true
-        }
+      // Find the branch to get its ID
+      const branch = await prisma.branch.findFirst({
+        where: { name: order.branchName },
+        select: { id: true }
       });
-  
-      // Get all connected users
-      const connectedUsers = socketService.getUserConnections();
-  
-      // Notify each user in the branch
-      for (const user of users) {
-        const userSockets = Array.from(connectedUsers.entries())
-          .filter(([_, conn]) => conn.userId === user.id);
-        
-        // Emit to all sockets for this user
-        for (const [socketId] of userSockets) {
-          io.to(socketId).emit('newOrder', {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            status: order.status,
-            orderType: order.orderType,
-            branch: order.branchName,
-            createdAt: order.createdAt
-          });
-        }
+
+      if (!branch) {
+        console.error(`Branch not found: ${order.branchName}`);
+        return;
       }
-  
-      // Also notify the branch room for dashboard updates
-      io.to(`branch-${order.branchName}`).emit('orderUpdate', {
-        type: 'NEW_ORDER',
-        orderId: order.id,
-        status: order.status,
-        timestamp: new Date()
-      });
-  
+
+      // We're not sending a print job here to avoid duplicates
+      // The print job is handled by the print service
+      // Instead, we'll just log the notification
+      console.log(`📢 Notified branch ${order.branchName} about new order ${order.orderNumber} (no duplicate print)`);
+      
     } catch (error) {
       console.error('Error in notifyNewOrder:', error);
     }
